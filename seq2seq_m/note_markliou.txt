@@ -1,0 +1,40 @@
+main refence is from https://google.github.io/seq2seq/nmt/
+
+1.  use wmt16_en_de.sh for downloading the dataset. this script will also maniputate the data using mosesdecoder.
+    hightlight 1. BPE means 'byte pair encoding'. This method can reduce the information. For example :
+        
+        aabedaad 
+        ZbedZd  if z = aa 
+        XedZd  if Z = Zb 
+        
+        such method froms a heuratical structure and reduce the seqence data.
+        
+        this wold be hance the "learn_BPE" program is needed.
+        
+2.  this program use the setting file for enviroment setting. So, use the 'envset4seq2seq.sh' for setting the enviroment.
+    !!! remember to set the "DATA_PATH" in this file. !!!
+    
+3.  this program need libcuti, so remember to:
+        export LD_LIBRARY_PATH=/usr/local/cuda/extras/CUPTI/lib64:$LD_LIBRARY_PATH
+    since the NVIDIA official website do not remind the users to set.
+   
+4.  the training script example is recoder in train_go.sh.
+        The program need 3 kinds of yaml:
+        1. nmt_small.yml => this define the model architecture
+        2. train_seq2seq.yml => "hooks" define which metreic we are going to monitor. "buket" is use to define the word pocket (see 6. below)
+        3. text_metrics_bpe.yml => use to measure the performace
+        
+        more information can be found in https://google.github.io/seq2seq/training/
+        
+5.  for inference the new data, two kinds of methods can be used. the first is the default method 
+    which is record in infer_sh_default.sh.
+    the second one is "beam tree" which is though to imporive the performance. the content is also 
+    reocred in the infer_sh_beam.sh.
+
+6.  "buket" is used for define the input and output. for example, if we have a buket pair list:
+    [(5,10),(15,20),(25,30)]
+    if we have a English input which have 3 words that will output 5 words of Germany, we can use the first buket.
+    But if we have 12 words for input, but will out 23 words, the second buket can not be used since it can just handle 20 words for output.
+    That is, the third bucket is used.
+    In tf.learn module, the bucket can be made automatically. if we give "10, 20, 30", 4 buckets will be made.
+    they are <10, 10-20, 20-30, >30. (since they are not seem to be paired)
