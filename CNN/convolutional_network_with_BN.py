@@ -40,6 +40,9 @@ def conv2d(x, W, b, strides=1):
     x = tf.nn.bias_add(x, b)
     return tf.nn.relu(x)
 
+# batch normalization layer markliou
+def BN(x, beta, gamma, epsilon=0.1):
+    
 
 def maxpool2d(x, k=2):
     # MaxPool2D wrapper
