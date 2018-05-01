@@ -137,8 +137,6 @@ with tf.Session() as sess:
         batch_x, batch_y = mnist.train.next_batch(batch_size)
         # Run optimization op (backprop)
         _, acc = sess.run([PGD_optimizer, accuracy], feed_dict={X: batch_x, Y: batch_y, keep_prob: 1})
-        # for reward in range(int(acc*100)):
-            # sess.run([PGD_optimizer, accuracy], feed_dict={X: batch_x, Y: batch_y, keep_prob: 1})
         # sess.run(train_op, feed_dict={X: batch_x, Y: batch_y, keep_prob: 1.0})
         
         if step % display_step == 0 or step == 1:
@@ -147,13 +145,6 @@ with tf.Session() as sess:
             loss, acc = sess.run([Policy, accuracy], feed_dict={X: batch_x,
                                                                  Y: batch_y,
                                                                  keep_prob: 1.0})
-            # #########
-            # c_logits = sess.run([tf.log(tf.nn.softmax(logits))], feed_dict={X: batch_x,
-                                                     # Y: batch_y,
-                                                     # keep_prob: 1.0})
-            # print(c_logits)
-            # input()
-            # #########
             
             print("Step " + str(step) + ", Minibatch Loss= " + \
                   "{:.4f}".format(loss) + ", Training Accuracy= " + \
