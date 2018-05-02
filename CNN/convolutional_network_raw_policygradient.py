@@ -80,20 +80,20 @@ def conv_net(x, weights, biases, dropout):
 # Store layers weight & bias
 weights = {
     # 5x5 conv, 1 input, 32 outputs
-    'wc1': tf.Variable(tf.random_normal([5, 5, 1, 32], stddev=0.001)),
+    'wc1': tf.Variable(tf.random_normal([5, 5, 1, 32], stddev=.05)),
     # 5x5 conv, 32 inputs, 64 outputs
-    'wc2': tf.Variable(tf.random_normal([5, 5, 32, 64], stddev=0.001)),
+    'wc2': tf.Variable(tf.random_normal([5, 5, 32, 64], stddev=.05)),
     # fully connected, 7*7*64 inputs, 1024 outputs
-    'wd1': tf.Variable(tf.random_normal([7*7*64, 1024], stddev=0.001)),
+    'wd1': tf.Variable(tf.random_normal([7*7*64, 1024], stddev=.05)),
     # 1024 inputs, 10 outputs (class prediction)
-    'out': tf.Variable(tf.random_normal([1024, num_classes], stddev=0.001))
+    'out': tf.Variable(tf.random_normal([1024, num_classes], stddev=.05))
 }
 
 biases = {
-    'bc1': tf.Variable(tf.random_normal([32], stddev=0.001)),
-    'bc2': tf.Variable(tf.random_normal([64], stddev=0.001)),
-    'bd1': tf.Variable(tf.random_normal([1024], stddev=0.001)),
-    'out': tf.Variable(tf.random_normal([num_classes], stddev=0.001))
+    'bc1': tf.Variable(tf.random_normal([32], stddev=.05)),
+    'bc2': tf.Variable(tf.random_normal([64], stddev=.05)),
+    'bd1': tf.Variable(tf.random_normal([1024], stddev=.05)),
+    'out': tf.Variable(tf.random_normal([num_classes], stddev=.05))
 }
 
 # Construct model
@@ -115,11 +115,15 @@ accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 ### Policy gradient. Use the accuracy as the reward and the softmax output as action
 # Policy =  tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
     # logits=prediction, labels=tf.one_hot(tf.argmax(prediction, 1),10)))
-Px = tf.reduce_max(tf.nn.softmax(logits),axis=1)
-# Px = tf.log(tf.reduce_max(tf.nn.softmax(logits),axis=1)) # Kapathy said the log is more friendly to the math http://karpathy.github.io/2016/05/31/rl/
-# Adv = (tf.cast(correct_pred, tf.float32) * 2.) - 1. # this reward makes give no-converging, may be caused from no different from right and wrong
-Adv = tf.cast(correct_pred, tf.float32) - accuracy # cooperating the final accuracy information into the policy is a good idea
+# Px = tf.reduce_max(tf.nn.softmax(logits),axis=1)
+Px = tf.log(tf.reduce_max(tf.nn.softmax(logits),axis=1)) # Kapathy said the log is more friendly to the math http://karpathy.github.io/2016/05/31/rl/
+# ## initutially reward. The right action give 1 and wring action give 0 
+Adv = (tf.cast(correct_pred, tf.float32) * 2.) - 1. # this reward makes give no-converging, with the initial stddev of 0.01, but stddev of 0.05
+# ## reward is depending on the accuracy. 
+# Adv = tf.cast(correct_pred, tf.float32) - accuracy # cooperating the final accuracy information into the policy is a good idea. But this still need a small stddev of initial
+
 Policy = tf.reduce_mean(Adv * Px) * -1
+
 PGD_optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(Policy)
 # PGD_optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(Policy)
 # PGD_optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate).minimize(Policy)
@@ -137,6 +141,8 @@ with tf.Session() as sess:
         batch_x, batch_y = mnist.train.next_batch(batch_size)
         # Run optimization op (backprop)
         _, acc = sess.run([PGD_optimizer, accuracy], feed_dict={X: batch_x, Y: batch_y, keep_prob: 1})
+        # for reward in range(int(acc*100)):
+            # sess.run([PGD_optimizer, accuracy], feed_dict={X: batch_x, Y: batch_y, keep_prob: 1})
         # sess.run(train_op, feed_dict={X: batch_x, Y: batch_y, keep_prob: 1.0})
         
         if step % display_step == 0 or step == 1:
@@ -145,6 +151,13 @@ with tf.Session() as sess:
             loss, acc = sess.run([Policy, accuracy], feed_dict={X: batch_x,
                                                                  Y: batch_y,
                                                                  keep_prob: 1.0})
+            # #########
+            # c_logits = sess.run([tf.log(tf.nn.softmax(logits))], feed_dict={X: batch_x,
+                                                     # Y: batch_y,
+                                                     # keep_prob: 1.0})
+            # print(c_logits)
+            # input()
+            # #########
             
             print("Step " + str(step) + ", Minibatch Loss= " + \
                   "{:.4f}".format(loss) + ", Training Accuracy= " + \
