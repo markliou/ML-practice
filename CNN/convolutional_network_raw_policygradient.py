@@ -18,7 +18,7 @@ mnist = input_data.read_data_sets("/tmp/data/", one_hot=True)
 
 # Training Parameters
 learning_rate = 1e-3
-num_steps = 20000000
+num_steps = 5000
 batch_size = 128
 display_step = 10
 
@@ -84,11 +84,11 @@ winitializer = tf.contrib.keras.initializers.he_normal()
 weights = {
     # # 5x5 conv, 1 input, 32 outputs
     # 'wc1': tf.Variable(tf.random_normal([5, 5, 1, 32], stddev=STDDEV)),
-    # # 5x5 conv, 32 inputs, 64 outputs
+    # 5x5 conv, 32 inputs, 64 outputs
     # 'wc2': tf.Variable(tf.random_normal([5, 5, 32, 64], stddev=STDDEV)),
-    # # fully connected, 7*7*64 inputs, 1024 outputs
+    # fully connected, 7*7*64 inputs, 1024 outputs
     # 'wd1': tf.Variable(tf.random_normal([7*7*64, 1024], stddev=STDDEV)),
-    # # 1024 inputs, 10 outputs (class prediction)
+    # 1024 inputs, 10 outputs (class prediction)
     # 'out': tf.Variable(tf.random_normal([1024, num_classes], stddev=STDDEV))
     
     ## try the Xavier initialization
@@ -143,7 +143,7 @@ Px = tf.log(tf.reduce_max(tf.nn.softmax(logits),axis=1)) # Kapathy said the log 
 Adv = (tf.cast(correct_pred, tf.float32) * 2.) - 1. # this reward makes give no-converging, with the initial stddev of 0.01, 0.1, 1, but stddev of 0.05, Xavier, He
 # Adv = (tf.cast(correct_pred, tf.float32) * 5) - 1. # no-converge at stddev=0.001, 0,01, but Xavier, He
 # ## reward is depending on the accuracy. 
-# Adv = tf.cast(correct_pred, tf.float32) - accuracy # cooperating the final accuracy information into the policy is a good idea. But this still need a small stddev of initial
+# Adv = tf.cast(correct_pred, tf.float32) - accuracy # This still need a small stddev (0.001) of initial. He initialization make no converging.
 
 Policy = tf.reduce_mean(Adv * Px) * -1
 
@@ -184,3 +184,20 @@ with tf.Session() as sess:
         sess.run(accuracy, feed_dict={X: mnist.test.images[:256],
                                       Y: mnist.test.labels[:256],
                                       keep_prob: 1.0}))
+
+                                      
+                                      
+### comments
+## 1. use Xavier or He initialization
+## 2. The batch normalization would also be very helpful
+## 3. giving the rewawrds of positive ones to prefer actions 
+##    of policy and negative ones for bad actions. giving the 
+##    same sign of rewards is bad for convergence 
+## 4. try the best to give the rewards to evey action. 
+##    Averaging the final reward to every action is hard to 
+##    converging.
+## 5. large batch size seems benefit to policy gradient.
+###
+                                      
+                                      
+                                      
