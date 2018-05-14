@@ -18,7 +18,7 @@ mnist = input_data.read_data_sets("/tmp/data/", one_hot=True)
 
 # Training Parameters
 learning_rate = 0.001
-num_steps = 200000
+num_steps = 2000
 batch_size = 128
 display_step = 10
 
@@ -88,8 +88,11 @@ def conv_net(x, weights, biases, dropout):
     return out
 
 # Store layers weight & bias
-initializer = tf.contrib.layers.xavier_initializer()
+# initializer = tf.contrib.layers.xavier_initializer()
+initializer = tf.random_normal()
 weights = {
+    
+    # Xavior initializer
     'wc1': tf.Variable(initializer([3, 3, 1, 32])),
     'wc2': tf.Variable(initializer([3, 3, 32, 64])),
     'wc3': tf.Variable(initializer([3, 3, 64, 32])),
