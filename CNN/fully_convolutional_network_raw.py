@@ -89,7 +89,8 @@ def conv_net(x, weights, biases, dropout):
 
 # Store layers weight & bias
 # initializer = tf.contrib.layers.xavier_initializer()
-initializer = tf.random_normal()
+initializer = tf.random_normal
+# initializer = tf.zeros
 weights = {
     
     # Xavior initializer
