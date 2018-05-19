@@ -11,6 +11,7 @@ Project: https://github.com/aymericdamien/TensorFlow-Examples/
 from __future__ import division, print_function, absolute_import
 
 import tensorflow as tf
+import numpy as np
 
 # Import MNIST data
 from tensorflow.examples.tutorials.mnist import input_data
@@ -45,7 +46,26 @@ def maxpool2d(x, k=2):
     return tf.nn.max_pool(x, ksize=[1, k, k, 1], strides=[1, k, k, 1],
                           padding='SAME')
 
-
+def Xavier_init(w_shape):
+    # https://prateekvjoshi.com/2016/03/29/understanding-xavier-initialization-in-deep-neural-networks/
+    # https://www.quora.com/What-is-an-intuitive-explanation-of-the-Xavier-Initialization-for-Deep-Neural-Networks
+    # var = 1/N, N = (IC_no+OC_no)/2 , IC_no and OC_no are the numbers of input channel and output channel 
+    #
+    # But from tensorflow doc (https://www.tensorflow.org/api_docs/python/tf/contrib/layers/xavier_initializer), 
+    # they defaltly use the random uniform of sqrt(6. / (OC_no+IC_no))
+    # (using random normal, the stddev is sqrt(2. / (OC_no+IC_no))
+    
+    if len(w_shape)==1: # we would use this to initialize the bias terms
+        w = tf.random_normal(w_shape, stddev=1)
+    else:
+        IC_no, OC_no = w_shape[2:]
+        X = tf.sqrt( 6. / (OC_no+IC_no) )
+        S = tf.sqrt( 2. / (OC_no+IC_no) )
+        # w = tf.random_uniform(w_shape, minval=-X, maxval=X)
+        w = tf.random_normal(w_shape, stddev=S)
+    return w
+                          
+                          
 # Create model
 def conv_net(x, weights, biases, dropout):
     # MNIST data input is a 1-D vector of 784 features (28*28 pixels)
@@ -89,16 +109,25 @@ def conv_net(x, weights, biases, dropout):
 
 # Store layers weight & bias
 # initializer = tf.contrib.layers.xavier_initializer()
-initializer = tf.random_normal
+# initializer = tf.random_normal
+initializer = Xavier_init # handicraft Xavior
 # initializer = tf.zeros
 weights = {
     
-    # Xavior initializer
+    # initializer of various function
     'wc1': tf.Variable(initializer([3, 3, 1, 32])),
     'wc2': tf.Variable(initializer([3, 3, 32, 64])),
     'wc3': tf.Variable(initializer([3, 3, 64, 32])),
     'wc4': tf.Variable(initializer([3, 3, 32, 64])),
     'wc5': tf.Variable(initializer([3, 3, 64, 32])),
+    
+    # initializing with handicraft Xavior
+    # 'wc1': tf.Variable(Xavior_init([3, 3, 1, 32])),
+    # 'wc2': tf.Variable(Xavior_init([3, 3, 32, 64])),
+    # 'wc3': tf.Variable(Xavior_init([3, 3, 64, 32])),
+    # 'wc4': tf.Variable(Xavior_init([3, 3, 32, 64])),
+    # 'wc5': tf.Variable(Xavior_init([3, 3, 64, 32])),
+    
     
     # 'out': tf.Variable(tf.random_normal([3, 3, 32, num_classes]))
     'out': tf.Variable(initializer([1, 1, 32, num_classes]))
