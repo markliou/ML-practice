@@ -1,0 +1,8 @@
+dataset/train/*
+dataset/test/*
+dataset/extra/*
+
+*.labels
+*.list
+*.tar.gz
+
