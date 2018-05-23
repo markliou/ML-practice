@@ -8,16 +8,17 @@ This toy script use the intutive thought to train a CNN which can reconize the S
 ```
 example output:
 
-['18732.png', '28740.png']
-pred:[array([[0, 0, 0, 0, 5, 2],
-       [0, 0, 0, 2, 0, 1]])]
-ans :[array([[0, 0, 0, 0, 5, 2],
-       [0, 0, 0, 2, 0, 1]])]
-step:50600 loss:6.863088607788086
+['25544.png', '27590.png']
+pred:[array([[0, 0, 0, 0, 1, 6],
+       [0, 0, 0, 0, 0, 7]])]
+ans :[array([[0, 0, 0, 0, 1, 6],
+       [0, 0, 0, 0, 0, 7]])]
+step:50670 loss:8.594249725341797
 
+where pred means the output of the CNN and ans is the ground truth.
 ```
-[18732.png](18732.png)
-[28740.png](28740.png)
+![25544.png](25544.png)
+![27590.png](27590.png)
 
 # license
 MIT license
