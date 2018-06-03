@@ -105,7 +105,14 @@ def main():
             x = x.reshape([-1, 28, 28, 1])
             y = np.hstack([np.zeros([batch_size,]), np.ones([batch_size,])]) #(fake, real)
             z = np.random.normal(size=batch_size* 7 * 7 * 32).reshape([-1, 7, 7, 32])
-            cX, Closs_D, Closs_G, _, _ = sess.run([gX, loss_D, loss_G, opt_D, opt_G], feed_dict={X:x, Y:y, Z:z})
+            
+            # cX, Closs_D, Closs_G, _, _ = sess.run([gX, loss_D, loss_G, opt_D, opt_G], feed_dict={X:x, Y:y, Z:z}) # strategy 1: update simultaneously
+            if iter%100 == 0 # stragegy 2: make D stroger but update less times
+                for D_iter in range(1000):
+                    cX, Closs_D, Closs_G, _ = sess.run([gX, loss_D, loss_G, opt_D], feed_dict={X:x, Y:y, Z:z})
+            else:
+                cX, Closs_D, Closs_G, _ = sess.run([gX, loss_D, loss_G, opt_G], feed_dict={X:x, Y:y, Z:z})
+            
             print('iteration:{} loss_D:{} loss_G:{}'.format(iter, Closs_D, Closs_G))
             if iter%10 == 0 :
                 visg = cX[0].T
