@@ -42,7 +42,7 @@ def D(x, dw):
     return tf.reshape(d_conv5, [-1,])
     pass
     
-def W():
+def W(reuse=False):
     initializer = tf.contrib.layers.xavier_initializer()
     with tf.variable_scope('Generator', reuse=reuse):
         gw = {
