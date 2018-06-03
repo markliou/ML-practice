@@ -13,10 +13,16 @@ def G(Z,gw):
 ## 2 times with stride 2 to get 28*28 matrix
     # the shape of z should be [-1, 7, 7, 32]
     batch_size = tf.shape(Z)[0]
-    g_conv1 = tf.nn.conv2d_transpose(    Z, gw['w1'], [batch_size, 14, 14, 128], [1, 2, 2, 1]) + gw['b1'] # 14*14, 128 channels
+    g_conv1 = tf.nn.conv2d_transpose(      Z, gw['w1'], [batch_size, 14, 14, 128], [1, 2, 2, 1]) + gw['b1'] # 14*14, 128 channels
     g_conv1 = tf.nn.relu(g_conv1)
-    g_conv2 = tf.nn.conv2d_transpose(g_conv1, gw['w2'], [batch_size, 28, 28, 1],  [1, 2, 2, 1]) + gw['b2'] # 28*28, 1 channels
-    x = tf.nn.sigmoid(g_conv2)
+    g_conv2 = tf.nn.conv2d_transpose(g_conv1, gw['w2'], [batch_size, 14, 14, 256], [1, 1, 1, 1]) + gw['b2'] # 14*14, 256 channels
+    g_conv2 = tf.nn.relu(g_conv2)
+    g_conv3 = tf.nn.conv2d_transpose(g_conv2, gw['w3'], [batch_size, 28, 28, 512], [1, 2, 2, 1]) + gw['b3'] # 28*28, 512 channels
+    g_conv3 = tf.nn.relu(g_conv3)
+    g_conv4 = tf.nn.conv2d_transpose(g_conv3, gw['w4'], [batch_size, 28, 28, 256], [1, 1, 1, 1]) + gw['b4'] # 28*28, 256 channels
+    g_conv4 = tf.nn.relu(g_conv4)
+    g_conv5 = tf.nn.conv2d_transpose(g_conv4, gw['w5'], [batch_size, 28, 28,   1], [1, 1, 1, 1]) + gw['b5'] # 28*28, 1 channels
+    x = tf.nn.sigmoid(g_conv5)
     return x
     pass
 
@@ -31,7 +37,7 @@ def D(x, dw):
     d_conv3 = tf.nn.relu(d_conv3)
     d_conv4 = tf.nn.conv2d(d_conv3, dw['w4'], [1, 2, 2, 1], 'SAME') + dw['b4'] # 2*2, 256 channels 
     d_conv4 = tf.nn.relu(d_conv4)
-    d_conv5 = tf.nn.conv2d(d_conv4, dw['w5'], [1, 2, 2, 1], 'SAME') + dw['b5'] # 1*1, 1 channels 
+    d_conv5 = tf.nn.conv2d(d_conv4, dw['w5'], [1, 1, 1, 1], 'VALID') + dw['b5'] # 1*1, 1 channels 
     d_conv5 = tf.nn.sigmoid(d_conv5)
     return tf.reshape(d_conv5, [-1,])
     pass
@@ -41,8 +47,14 @@ def W():
     gw = {
         'w1' : tf.Variable(initializer([3, 3, 128, 32])),
         'b1' : tf.Variable(initializer([128])),
-        'w2' : tf.Variable(initializer([3, 3, 1, 128])),
-        'b2' : tf.Variable(initializer([1])),
+        'w2' : tf.Variable(initializer([3, 3, 256, 128])),
+        'b2' : tf.Variable(initializer([256])),
+        'w3' : tf.Variable(initializer([3, 3, 512, 256])),
+        'b3' : tf.Variable(initializer([512])),
+        'w4' : tf.Variable(initializer([3, 3, 256, 512])),
+        'b4' : tf.Variable(initializer([256])),
+        'w5' : tf.Variable(initializer([3, 3,   1, 256])),
+        'b5' : tf.Variable(initializer([1])),
     }
     dw = {
         'w1' : tf.Variable(initializer([3, 3, 1, 512])),
@@ -53,7 +65,7 @@ def W():
         'b3' : tf.Variable(initializer([512])),
         'w4' : tf.Variable(initializer([3, 3, 512, 256])),
         'b4' : tf.Variable(initializer([256])),
-        'w5' : tf.Variable(initializer([1, 1, 256, 1])),
+        'w5' : tf.Variable(initializer([2, 2, 256, 1])),
         'b5' : tf.Variable(initializer([1])),
     }
     return [gw,dw]
@@ -96,11 +108,16 @@ def main():
             cX, Closs_D, Closs_G, _, _ = sess.run([gX, loss_D, loss_G, opt_D, opt_G], feed_dict={X:x, Y:y, Z:z})
             print('iteration:{} loss_D:{} loss_G:{}'.format(iter, Closs_D, Closs_G))
             if iter%10 == 0 :
-                vis = cX[0].T
-                visp = np.vstack([vis, vis, vis]).T
-                visp *= 128
-                visp.astype(np.uint8)
-                sm.imsave('g.jpg',visp)
+                visg = cX[0].T
+                visr = x[0].T
+                visgp = np.vstack([visg, visg, visg]).T
+                visgp *= 256
+                visrp = np.vstack([visr, visr, visr]).T
+                visrp *= 256
+                visgp.astype(np.uint8)
+                sm.imsave('g.jpg',visgp)
+                visrp.astype(np.uint8)
+                sm.imsave('r.jpg',visrp)
         
     
     pass
