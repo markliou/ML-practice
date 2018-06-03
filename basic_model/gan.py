@@ -104,7 +104,8 @@ def main():
             x, _ = mnist.train.next_batch(batch_size)
             x = x.reshape([-1, 28, 28, 1])
             y = np.hstack([np.zeros([batch_size,]), np.ones([batch_size,])]) #(fake, real)
-            z = np.random.normal(size=batch_size* 7 * 7 * 32).reshape([-1, 7, 7, 32])
+            # z = np.random.normal(size=batch_size* 7 * 7 * 32).reshape([-1, 7, 7, 32])
+            z = np.random.uniform(-1, 1, size=batch_size* 7 * 7 * 32).reshape([-1, 7, 7, 32])
             
             ## strategy 1: update simultaneously
             cX, Closs_D, Closs_G, _, _ = sess.run([gX, loss_D, loss_G, opt_D, opt_G], feed_dict={X:x, Y:y, Z:z}) 
