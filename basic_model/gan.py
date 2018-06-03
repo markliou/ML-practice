@@ -13,13 +13,13 @@ def G(Z,gw):
 ## 2 times with stride 2 to get 28*28 matrix
     # the shape of z should be [-1, 7, 7, 32]
     batch_size = tf.shape(Z)[0]
-    g_conv1 = tf.nn.conv2d_transpose(      Z, gw['w1'], [batch_size, 14, 14, 128], [1, 2, 2, 1]) + gw['b1'] # 14*14, 128 channels
+    g_conv1 = tf.nn.conv2d_transpose(      Z, gw['w1'], [batch_size, 14, 14, 16], [1, 2, 2, 1]) + gw['b1'] # 14*14, 16 channels
     g_conv1 = tf.nn.relu(g_conv1)
-    g_conv2 = tf.nn.conv2d_transpose(g_conv1, gw['w2'], [batch_size, 14, 14, 256], [1, 1, 1, 1]) + gw['b2'] # 14*14, 256 channels
+    g_conv2 = tf.nn.conv2d_transpose(g_conv1, gw['w2'], [batch_size, 14, 14, 32], [1, 1, 1, 1]) + gw['b2'] # 14*14, 32 channels
     g_conv2 = tf.nn.relu(g_conv2)
-    g_conv3 = tf.nn.conv2d_transpose(g_conv2, gw['w3'], [batch_size, 28, 28, 512], [1, 2, 2, 1]) + gw['b3'] # 28*28, 512 channels
+    g_conv3 = tf.nn.conv2d_transpose(g_conv2, gw['w3'], [batch_size, 28, 28, 64], [1, 2, 2, 1]) + gw['b3'] # 28*28, 64 channels
     g_conv3 = tf.nn.relu(g_conv3)
-    g_conv4 = tf.nn.conv2d_transpose(g_conv3, gw['w4'], [batch_size, 28, 28, 256], [1, 1, 1, 1]) + gw['b4'] # 28*28, 256 channels
+    g_conv4 = tf.nn.conv2d_transpose(g_conv3, gw['w4'], [batch_size, 28, 28, 32], [1, 1, 1, 1]) + gw['b4'] # 28*28, 32 channels
     g_conv4 = tf.nn.relu(g_conv4)
     g_conv5 = tf.nn.conv2d_transpose(g_conv4, gw['w5'], [batch_size, 28, 28,   1], [1, 1, 1, 1]) + gw['b5'] # 28*28, 1 channels
     x = tf.nn.sigmoid(g_conv5)
@@ -46,15 +46,15 @@ def W(reuse=False):
     initializer = tf.contrib.layers.xavier_initializer()
     with tf.variable_scope('Generator', reuse=reuse):
         gw = {
-            'w1' : tf.Variable(initializer([3, 3, 128, 32])),
-            'b1' : tf.Variable(initializer([128])),
-            'w2' : tf.Variable(initializer([3, 3, 256, 128])),
-            'b2' : tf.Variable(initializer([256])),
-            'w3' : tf.Variable(initializer([3, 3, 512, 256])),
-            'b3' : tf.Variable(initializer([512])),
-            'w4' : tf.Variable(initializer([3, 3, 256, 512])),
-            'b4' : tf.Variable(initializer([256])),
-            'w5' : tf.Variable(initializer([3, 3,   1, 256])),
+            'w1' : tf.Variable(initializer([3, 3, 16, 32])),
+            'b1' : tf.Variable(initializer([16])),
+            'w2' : tf.Variable(initializer([3, 3, 32, 16])),
+            'b2' : tf.Variable(initializer([32])),
+            'w3' : tf.Variable(initializer([3, 3, 64, 32])),
+            'b3' : tf.Variable(initializer([64])),
+            'w4' : tf.Variable(initializer([3, 3, 32, 64])),
+            'b4' : tf.Variable(initializer([32])),
+            'w5' : tf.Variable(initializer([3, 3,   1, 32])),
             'b5' : tf.Variable(initializer([1])),
         }
     with tf.variable_scope('Discriminator', reuse=reuse):
@@ -100,8 +100,10 @@ def main():
     logits_4G = D(gX, dw)
     loss_D = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=Y, logits=logits_4D))
     loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4G), logits=logits_4G))
-    opt_D = tf.train.AdamOptimizer(1e-3).minimize(loss_D, var_list = D_var)
-    opt_G = tf.train.AdamOptimizer(1e-3).minimize(loss_G, var_list = G_var)
+    opt_D = tf.train.AdamOptimizer(1e-4).minimize(loss_D, var_list = D_var)
+    opt_G = tf.train.AdamOptimizer(1e-4).minimize(loss_G, var_list = G_var)
+    # opt_D = tf.train.RMSPropOptimizer(1e-4).minimize(loss_D, var_list = D_var)
+    # opt_G = tf.train.RMSPropOptimizer(1e-4).minimize(loss_G, var_list = G_var)
     
     ## start training
     with tf.Session() as sess:
@@ -110,8 +112,8 @@ def main():
             x, _ = mnist.train.next_batch(batch_size)
             x = x.reshape([-1, 28, 28, 1])
             y = np.hstack([np.zeros([batch_size,]), np.ones([batch_size,])]) #(fake, real)
-            # z = np.random.normal(size=batch_size* 7 * 7 * 32).reshape([-1, 7, 7, 32])
-            z = np.random.uniform(-1, 1, size=batch_size* 7 * 7 * 32).reshape([-1, 7, 7, 32])
+            z = np.random.normal(size=batch_size* 7 * 7 * 32).reshape([-1, 7, 7, 32])
+            # z = np.random.uniform(-1, 1, size=batch_size* 7 * 7 * 32).reshape([-1, 7, 7, 32])
             
             ## strategy 1: update simultaneously
             cX, Closs_D, Closs_G, _, _ = sess.run([gX, loss_D, loss_G, opt_D, opt_G], feed_dict={X:x, Y:y, Z:z}) 
@@ -128,9 +130,9 @@ def main():
                 visg = cX[0].T
                 visr = x[0].T
                 visgp = np.vstack([visg, visg, visg]).T
-                visgp *= 256
+                visgp *= 255
                 visrp = np.vstack([visr, visr, visr]).T
-                visrp *= 256
+                visrp *= 255
                 visgp.astype(np.uint8)
                 sm.imsave('g.jpg',visgp)
                 visrp.astype(np.uint8)
