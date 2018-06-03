@@ -73,7 +73,7 @@ def W():
     
 def main():
     batch_size = 32
-    training_iter = 5000
+    training_iter = 500000
     
     ## Import MNIST data
     mnist = input_data.read_data_sets("/tmp/data/", one_hot=True)
@@ -106,13 +106,15 @@ def main():
             y = np.hstack([np.zeros([batch_size,]), np.ones([batch_size,])]) #(fake, real)
             z = np.random.normal(size=batch_size* 7 * 7 * 32).reshape([-1, 7, 7, 32])
             
-            # cX, Closs_D, Closs_G, _, _ = sess.run([gX, loss_D, loss_G, opt_D, opt_G], feed_dict={X:x, Y:y, Z:z}) # strategy 1: update simultaneously
-            if iter % 500 == 0 : # stragegy 2: make D stroger but update less times
-                for D_iter in range(100):
-                    cX, Closs_D, Closs_G, _ = sess.run([gX, loss_D, loss_G, opt_D], feed_dict={X:x, Y:y, Z:z})
-                    z = np.random.normal(size=batch_size* 7 * 7 * 32).reshape([-1, 7, 7, 32])
-            else:
-                cX, Closs_D, Closs_G, _ = sess.run([gX, loss_D, loss_G, opt_G], feed_dict={X:x, Y:y, Z:z})
+            ## strategy 1: update simultaneously
+            cX, Closs_D, Closs_G, _, _ = sess.run([gX, loss_D, loss_G, opt_D, opt_G], feed_dict={X:x, Y:y, Z:z}) 
+            ## stragegy 2: make D stroger but update less times
+            # if iter % 500 == 0 : 
+                # for D_iter in range(100):
+                    # cX, Closs_D, Closs_G, _ = sess.run([gX, loss_D, loss_G, opt_D], feed_dict={X:x, Y:y, Z:z})
+                    # z = np.random.normal(size=batch_size* 7 * 7 * 32).reshape([-1, 7, 7, 32])
+            # else:
+                # cX, Closs_D, Closs_G, _ = sess.run([gX, loss_D, loss_G, opt_G], feed_dict={X:x, Y:y, Z:z})
             
             print('iteration:{} loss_D:{} loss_G:{}'.format(iter, Closs_D, Closs_G))
             if iter%10 == 0 :
