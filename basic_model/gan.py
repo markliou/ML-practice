@@ -44,30 +44,32 @@ def D(x, dw):
     
 def W():
     initializer = tf.contrib.layers.xavier_initializer()
-    gw = {
-        'w1' : tf.Variable(initializer([3, 3, 128, 32])),
-        'b1' : tf.Variable(initializer([128])),
-        'w2' : tf.Variable(initializer([3, 3, 256, 128])),
-        'b2' : tf.Variable(initializer([256])),
-        'w3' : tf.Variable(initializer([3, 3, 512, 256])),
-        'b3' : tf.Variable(initializer([512])),
-        'w4' : tf.Variable(initializer([3, 3, 256, 512])),
-        'b4' : tf.Variable(initializer([256])),
-        'w5' : tf.Variable(initializer([3, 3,   1, 256])),
-        'b5' : tf.Variable(initializer([1])),
-    }
-    dw = {
-        'w1' : tf.Variable(initializer([3, 3, 1, 512])),
-        'b1' : tf.Variable(initializer([512])),
-        'w2' : tf.Variable(initializer([3, 3, 512, 128])),
-        'b2' : tf.Variable(initializer([128])),
-        'w3' : tf.Variable(initializer([3, 3, 128, 512])),
-        'b3' : tf.Variable(initializer([512])),
-        'w4' : tf.Variable(initializer([3, 3, 512, 256])),
-        'b4' : tf.Variable(initializer([256])),
-        'w5' : tf.Variable(initializer([2, 2, 256, 1])),
-        'b5' : tf.Variable(initializer([1])),
-    }
+    with tf.variable_scope('Generator', reuse=reuse):
+        gw = {
+            'w1' : tf.Variable(initializer([3, 3, 128, 32])),
+            'b1' : tf.Variable(initializer([128])),
+            'w2' : tf.Variable(initializer([3, 3, 256, 128])),
+            'b2' : tf.Variable(initializer([256])),
+            'w3' : tf.Variable(initializer([3, 3, 512, 256])),
+            'b3' : tf.Variable(initializer([512])),
+            'w4' : tf.Variable(initializer([3, 3, 256, 512])),
+            'b4' : tf.Variable(initializer([256])),
+            'w5' : tf.Variable(initializer([3, 3,   1, 256])),
+            'b5' : tf.Variable(initializer([1])),
+        }
+    with tf.variable_scope('Discriminator', reuse=reuse):
+        dw = {
+            'w1' : tf.Variable(initializer([3, 3, 1, 512])),
+            'b1' : tf.Variable(initializer([512])),
+            'w2' : tf.Variable(initializer([3, 3, 512, 128])),
+            'b2' : tf.Variable(initializer([128])),
+            'w3' : tf.Variable(initializer([3, 3, 128, 512])),
+            'b3' : tf.Variable(initializer([512])),
+            'w4' : tf.Variable(initializer([3, 3, 512, 256])),
+            'b4' : tf.Variable(initializer([256])),
+            'w5' : tf.Variable(initializer([2, 2, 256, 1])),
+            'b5' : tf.Variable(initializer([1])),
+        }
     return [gw,dw]
     pass 
     
@@ -85,6 +87,10 @@ def main():
     Z = tf.placeholder(dtype=tf.float32, shape=[None, 7, 7, 32]) # the noise for generating samples
     # announce the weights of G and D
     [gw, dw] = W()
+    # Since the defalut setting of Tensorflow will update every variable during each optimizor, we need to lock the 
+    # variables which we don't want it be influenced when runing optimization
+    G_var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Generator')
+    D_var = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Discriminator')
     
     # get samples from generator and discriminator
     gX = G(Z, gw)
@@ -94,8 +100,8 @@ def main():
     logits_4G = D(gX, dw)
     loss_D = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=Y, logits=logits_4D))
     loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4G), logits=logits_4G))
-    opt_D = tf.train.AdamOptimizer(1e-5).minimize(loss_D)
-    opt_G = tf.train.AdamOptimizer(1e-5).minimize(loss_G)
+    opt_D = tf.train.AdamOptimizer(1e-3).minimize(loss_D, var_list = D_var)
+    opt_G = tf.train.AdamOptimizer(1e-3).minimize(loss_G, var_list = G_var)
     
     ## start training
     with tf.Session() as sess:
