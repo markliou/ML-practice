@@ -95,7 +95,7 @@ def main():
     loss_D = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=Y, logits=logits_4D))
     loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4G), logits=logits_4G))
     opt_D = tf.train.AdamOptimizer(1e-5).minimize(loss_D)
-    opt_G = tf.train.AdamOptimizer(1e-6).minimize(loss_G)
+    opt_G = tf.train.AdamOptimizer(1e-5).minimize(loss_G)
     
     ## start training
     with tf.Session() as sess:
@@ -107,7 +107,7 @@ def main():
             z = np.random.normal(size=batch_size* 7 * 7 * 32).reshape([-1, 7, 7, 32])
             
             # cX, Closs_D, Closs_G, _, _ = sess.run([gX, loss_D, loss_G, opt_D, opt_G], feed_dict={X:x, Y:y, Z:z}) # strategy 1: update simultaneously
-            if iter%100 == 0 : # stragegy 2: make D stroger but update less times
+            if iter % 500 == 0 : # stragegy 2: make D stroger but update less times
                 for D_iter in range(100):
                     cX, Closs_D, Closs_G, _ = sess.run([gX, loss_D, loss_G, opt_D], feed_dict={X:x, Y:y, Z:z})
                     z = np.random.normal(size=batch_size* 7 * 7 * 32).reshape([-1, 7, 7, 32])
