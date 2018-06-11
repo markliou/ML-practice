@@ -75,7 +75,6 @@ def W(reuse=False):
             'w1' : tf.Variable(tf.random_uniform([ 1,  1, 256,  512])),
             'b1' : tf.Variable(tf.zeros([256])),
             'w2' : tf.Variable(initializer([ 2,  2,  128, 256])),
-            # 'w2' : tf.Variable(tf.random_uniform([ 2,  2, 128,  2048])),
             'b2' : tf.Variable(tf.zeros([128])),
             'w3' : tf.Variable(initializer([ 3,  3,   64,  128])),
             'b3' : tf.Variable(tf.zeros([64])),
@@ -107,7 +106,7 @@ def W(reuse=False):
 def main():
     batch_size = 32
     enhance_G_sample_rate = 1 #0.25
-    training_iter = 500000
+    training_iter = 30000
     noize_dim = 512
     alpha = 1. # constant for weaking the D
     
