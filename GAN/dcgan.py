@@ -158,12 +158,13 @@ def main():
     config.gpu_options.allow_growth=True
     with tf.Session(config=config) as sess:
         feed_in_G_sample_size = int(batch_size * enhance_G_sample_rate)
-        y = np.hstack([np.zeros([feed_in_G_sample_size,]) + softdec, np.ones([batch_size,]) - softdec]) #(fake, real), soft one-hots
+        
         # y = np.hstack([np.zeros([feed_in_G_sample_size,]), np.ones([batch_size,])]) #(fake, real)
     
         sess.run(tf.global_variables_initializer())
         for iter in range(training_iter):
             softdec =softdec_c * np.random.random()
+            y = np.hstack([np.zeros([feed_in_G_sample_size,]) + softdec, np.ones([batch_size,]) - softdec]) #(fake, real), soft one-hots
             
             x, _ = mnist.train.next_batch(batch_size)
             x = x.reshape([-1, 28, 28, 1])
