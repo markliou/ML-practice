@@ -17,9 +17,9 @@ def minibatch_discrimonation(sample_no, noize_dim, gw):
     # gradients casuing the mode collapse.
     return  tf.reduce_mean(
                 tf.losses.cosine_distance(
-                    labels      = G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw),
-                    predictions = G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw),
-                    axis = -1
+                    labels      = tf.nn.l2_normalize(G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw), 0),
+                    predictions = tf.nn.l2_normalize(G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw), 0),
+                    axis = 0
                 )
             )
 pass
