@@ -13,6 +13,8 @@ def minibatch_discrimonation(sample_no, noize_dim, gw):
     # Here will generat new samples for batch discriminator.
     # comparing to iteration run all the samples, this just generats two times and 
     # simplily compare them once to get roughtly estimation.
+    # This value will be applied with focal loss which means we trend to ignore the 
+    # gradients casuing the mode collapse.
     return  tf.reduce_mean(
                 tf.losses.cosine_distance(
                     labels      = G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw),
