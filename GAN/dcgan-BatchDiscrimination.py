@@ -152,7 +152,7 @@ def main():
     logits_4D = D(tf.concat([gX, X], axis=0), dw) #label: (fake, real)
     logits_4G = D(gX, dw)
     loss_D = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=Y, logits=logits_4D))
-    loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4G), logits=logits_4G)) * (mbdl_lambda - mbdl) # policy gradient
+    loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4G), logits=logits_4G)) * (mbdl - mbdl_lambda) # policy gradient
     opt_D = tf.train.AdamOptimizer(1e-4, beta1=0.382).minimize(loss_D, var_list = D_var)
     opt_G = tf.train.AdamOptimizer(1e-4, beta1=0.382).minimize(loss_G, var_list = G_var)
     # opt_D = tf.train.AdamOptimizer(1e-6, beta1=0.618).minimize(loss_D, var_list = D_var)
