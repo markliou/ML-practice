@@ -124,7 +124,7 @@ def main():
     alpha = 1. # constant for weaking the D
     softdec_c = .05 # soft the one-hot
     mbdl_sample_no = 5 # mini batch discrimination sample number
-    mbdl_lambda = 0.1 # attenuation the mini-batch discrimination penality
+    mbdl_lambda = 0.5 # attenuation the mini-batch discrimination penality
     
     ## Import MNIST data
     mnist = input_data.read_data_sets("/tmp/data/", one_hot=True)
