@@ -13,7 +13,7 @@ def minibatch_discrimonation_layer(sample_no, noize_dim, gw):
     # Here will generat new samples for batch discriminator.
     # comparing to iteration run all the samples, this just generats two times and 
     # simplily compare them once to get roughtly estimation.
-    return  tf.reduce_mean()
+    return  tf.reduce_mean(
                 tf.losses.cosine_distance(
                     labels      = G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw),
                     predictions = G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw),
