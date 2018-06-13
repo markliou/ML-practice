@@ -9,7 +9,7 @@ def lrelu(x, lamb = 0.2):
     return tf.maximum(x, x*lamb)
 pass
 
-def minibatch_discrimonation_layer(sample_no, noize_dim, gw):
+def minibatch_discrimonation(sample_no, noize_dim, gw):
     # Here will generat new samples for batch discriminator.
     # comparing to iteration run all the samples, this just generats two times and 
     # simplily compare them once to get roughtly estimation.
