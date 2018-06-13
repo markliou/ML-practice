@@ -9,11 +9,11 @@ def lrelu(x, lamb = 0.2):
     return tf.maximum(x, x*lamb)
 pass
 
-def mini_batch_discrimonation(sample_no, noize_dim, gw):
+def minibatch_discrimonation_layer(sample_no, noize_dim, gw):
     # Here will generat new samples for batch discriminator.
     # comparing to iteration run all the samples, this just generats two times and 
     # simplily compare them once to get roughtly estimation.
-    return  tf.reduce_mean(
+    return  tf.reduce_mean()
                 tf.losses.cosine_distance(
                     labels      = G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw),
                     predictions = G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw),
@@ -123,8 +123,7 @@ def main():
     noize_dim = 512
     alpha = 1. # constant for weaking the D
     softdec_c = .05 # soft the one-hot
-    mbdl_sample_no = 5 # mini batch discrimination sample number
-    mbdl_lambda = 0.5 # attenuation the mini-batch discrimination penality
+    mbdl_sample_no = batch_size # mini batch discrimination sample number
     
     ## Import MNIST data
     mnist = input_data.read_data_sets("/tmp/data/", one_hot=True)
@@ -152,7 +151,7 @@ def main():
     logits_4D = D(tf.concat([gX, X], axis=0), dw) #label: (fake, real)
     logits_4G = D(gX, dw)
     loss_D = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=Y, logits=logits_4D))
-    loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4G), logits=logits_4G)) * (mbdl - mbdl_lambda) # policy gradient
+    loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4G), logits=logits_4G)) * (mbdl) # focal loss, using the minibatch distrinimation result as focal. The weighs with large resutls are bad and will get samll gradients.
     opt_D = tf.train.AdamOptimizer(1e-4, beta1=0.382).minimize(loss_D, var_list = D_var)
     opt_G = tf.train.AdamOptimizer(1e-4, beta1=0.382).minimize(loss_G, var_list = G_var)
     # opt_D = tf.train.AdamOptimizer(1e-6, beta1=0.618).minimize(loss_D, var_list = D_var)
