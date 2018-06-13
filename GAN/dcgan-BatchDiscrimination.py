@@ -145,7 +145,7 @@ def main():
     
     # get samples from generator
     gX = G(Z, gw)
-    mbdl = mini_batch_discrimonation(mbdl_sample_no, noize_dim, gw)
+    mbdl = minibatch_discrimonation(mbdl_sample_no, noize_dim, gw)
     
     # define the loss and optimizers, real samples are labeled 1 and fake samples are labeled 0
     logits_4D = D(tf.concat([gX, X], axis=0), dw) #label: (fake, real)
