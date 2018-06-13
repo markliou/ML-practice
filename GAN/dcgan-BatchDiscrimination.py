@@ -15,13 +15,11 @@ def minibatch_discrimonation(sample_no, noize_dim, gw):
     # simplily compare them once to get roughtly estimation.
     # This value will be applied with focal loss which means we trend to ignore the 
     # gradients casuing the mode collapse.
-    return  tf.reduce_mean(
-                tf.losses.cosine_distance(
-                    labels      = tf.nn.l2_normalize(G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw), 0),
-                    predictions = tf.nn.l2_normalize(G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw), 0),
-                    axis = 0
+    return  1 - tf.losses.cosine_distance(
+                labels      = tf.nn.l2_normalize(G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw), 0),
+                predictions = tf.nn.l2_normalize(G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw), 0),
+                axis = 0
                 )
-            )
 pass
 
 def G(Z,gw):
