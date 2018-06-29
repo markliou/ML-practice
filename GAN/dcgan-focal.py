@@ -15,11 +15,31 @@ def minibatch_discrimonation(sample_no, noize_dim, gw):
     # simplily compare them once to get roughtly estimation.
     # This value will be applied with focal loss which means we trend to ignore the 
     # gradients casuing the mode collapse.
-    return  1 - tf.losses.cosine_distance(
-                labels      = tf.nn.l2_normalize(G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw), 0),
-                predictions = tf.nn.l2_normalize(G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw), 0),
-                axis = 0
-                )
+    #return  1 - tf.losses.cosine_distance(
+                #labels      = tf.nn.l2_normalize(G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw), 0),
+                #predictions = tf.nn.l2_normalize(G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw), 0),
+                #axis = 0
+                #) * (1/sample_no)
+    #mdl = tf.losses.absolute_difference(
+    #      labels      = tf.nn.l2_normalize(G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw), 0),
+    #      predictions = tf.nn.l2_normalize(G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw), 0),
+    #      ) * (1/sample_no)
+    
+    GA = tf.nn.l2_normalize(G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw), 0)
+    GB = tf.nn.l2_normalize(G(np.random.uniform(size = sample_no * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim]), gw), 0)
+    T1 = tf.random_normal([3, 3, 1, 32]) 
+    T2 = tf.random_normal([5, 5, 32, 1])
+    FAc1 = tf.nn.conv2d(GA, T1, [1, 2, 2, 1], "SAME")
+    FAc2 = tf.nn.conv2d(FAc1, T2, [1, 2, 2, 1], "SAME")
+    FBc1 = tf.nn.conv2d(GB, T1, [1, 2, 2, 1], "SAME")
+    FBc2 = tf.nn.conv2d(FBc1, T2, [1, 2, 2, 1], "SAME")
+    mdl = tf.losses.mean_squared_error(
+          labels      = FAc2,
+          predictions = FBc2,
+          ) * (1/sample_no)
+    
+    return mdl
+
 pass
 
 def G(Z,gw):
@@ -39,25 +59,25 @@ def G(Z,gw):
     batch_size = tf.shape(Z)[0]
     
     # Z = tf.nn.tanh(Z)
-    #Z = tf.layers.batch_normalization(Z)
+    Z = tf.layers.batch_normalization(Z)
     g_conv1 = tf.nn.conv2d_transpose(      Z, gw['w1'], [batch_size,  2,  2, 256], [1, 2, 2, 1], padding="VALID") + gw['b1'] # 2*2, 128 channels
     g_conv1 = activation_function(g_conv1)
-    # g_conv1 = tf.nn.dropout(g_conv1, dropout_keep_rate)
-    # g_conv1 = tf.layers.batch_normalization(g_conv1)
+    #g_conv1 = tf.nn.dropout(g_conv1, dropout_keep_rate)
+    #g_conv1 = tf.layers.batch_normalization(g_conv1)
     g_conv2 = tf.nn.conv2d_transpose(g_conv1, gw['w2'], [batch_size,  4,  4,  128], [1, 2, 2, 1], padding="SAME") + gw['b2'] # 4*4, 64 channels
     g_conv2 = activation_function(g_conv2)
-    # g_conv2 = tf.nn.dropout(g_conv2, dropout_keep_rate)
-    # g_conv2 = tf.layers.batch_normalization(g_conv2)
+    #g_conv2 = tf.nn.dropout(g_conv2, dropout_keep_rate)
+    #g_conv2 = tf.layers.batch_normalization(g_conv2)
     g_conv3 = tf.nn.conv2d_transpose(g_conv2, gw['w3'], [batch_size,  7,  7,   64], [1, 2, 2, 1], padding="SAME") + gw['b3'] # 7*7, 32 channels
     g_conv3 = activation_function(g_conv3)
-    # g_conv3 = tf.nn.dropout(g_conv3, dropout_keep_rate)
-    # g_conv3 = tf.layers.batch_normalization(g_conv3)
+    #g_conv3 = tf.nn.dropout(g_conv3, dropout_keep_rate)
+    #g_conv3 = tf.layers.batch_normalization(g_conv3)
     g_conv4 = tf.nn.conv2d_transpose(g_conv3, gw['w4'], [batch_size, 14, 14,  128], [1, 2, 2, 1], padding="SAME") + gw['b4'] # 14*14, 32 channels
     g_conv4 = activation_function(g_conv4)
-    # g_conv4 = tf.nn.dropout(g_conv4, dropout_keep_rate)
-    # g_conv4 = tf.layers.batch_normalization(g_conv4)
+    #g_conv4 = tf.nn.dropout(g_conv4, dropout_keep_rate)
+    #g_conv4 = tf.layers.batch_normalization(g_conv4)
     g_conv5 = tf.nn.conv2d_transpose(g_conv4, gw['w5'], [batch_size, 28, 28,    1], [1, 2, 2, 1], padding="SAME") + gw['b5'] # 28*28, 1 channels
-    # g_conv5 = tf.layers.batch_normalization(g_conv5)
+    #g_conv5 = tf.layers.batch_normalization(g_conv5)
     x = tf.nn.tanh(g_conv5)
     return x
     pass
@@ -84,8 +104,8 @@ def W(reuse=False):
     # initializer = tf.random_normal
     with tf.variable_scope('Generator', reuse=reuse):
         gw = {
-            # 'w1' : tf.Variable(initializer([ 1,  1, 256,  512])),
-            'w1' : tf.Variable(tf.random_uniform([ 1,  1, 256,  512])),
+            'w1' : tf.Variable(initializer([ 1,  1, 256,  512])),
+            # 'w1' : tf.Variable(tf.random_uniform([ 1,  1, 256,  512])),
             'b1' : tf.Variable(tf.zeros([256])),
             'w2' : tf.Variable(initializer([ 2,  2,  128, 256])),
             'b2' : tf.Variable(tf.zeros([128])),
@@ -117,13 +137,13 @@ def W(reuse=False):
 
     
 def main():
-    batch_size = 32
-    enhance_G_sample_rate = 1 #0.25
-    training_iter = 150000
+    batch_size = 24
+    enhance_G_sample_rate = 0.25
+    training_iter = 200000
     noize_dim = 512
     alpha = 1. # constant for weaking the D
     softdec_c = .05 # soft the one-hot
-    mbdl_sample_no = batch_size # mini batch discrimination sample number
+    mbdl_sample_no = int(batch_size + enhance_G_sample_rate)  * 30 # mini batch discrimination sample number
     
     ## Import MNIST data
     mnist = input_data.read_data_sets("/tmp/data/", one_hot=True)
@@ -150,16 +170,19 @@ def main():
     # define the loss and optimizers, real samples are labeled 1 and fake samples are labeled 0
     logits_4D = D(tf.concat([gX, X], axis=0), dw) #label: (fake, real)
     logits_4G = D(gX, dw)
-    loss_D = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=Y, logits=logits_4D))
-    loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4G), logits=logits_4G)) * (1-mbdl) # focal loss, using the minibatch distrinimation result as focal. The weighs with large resutls are bad and will get large gradients.
-    opt_D = tf.train.AdamOptimizer(1e-4, beta1=0.382).minimize(loss_D, var_list = D_var)
-    opt_G = tf.train.AdamOptimizer(1e-4, beta1=0.382).minimize(loss_G, var_list = G_var)
-    # opt_D = tf.train.AdamOptimizer(1e-6, beta1=0.618).minimize(loss_D, var_list = D_var)
-    # opt_G = tf.train.AdamOptimizer(1e-4, beta1=0.382).minimize(loss_G)
+    loss_D = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=Y, logits=logits_4D)) * tf.pow(tf.exp(mbdl), 2) * .75 
+    # focal loss, using the minibatch distrinimation result as focal. The weighs with large resutls are bad and will get large gradients.
+    loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4G), logits=logits_4G)) * tf.pow(tf.exp(-mbdl), 2) * .25
+    # regulize the loss 
+    # loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4G), logits=logits_4G)) + 0.01 * mbdl
+    # opt_D = tf.train.AdamOptimizer(1e-4, beta1=0.382).minimize(loss_D, var_list = D_var)
+    # opt_G = tf.train.AdamOptimizer(1e-4, beta1=0.382).minimize(loss_G, var_list = G_var)
+    opt_D = tf.train.AdamOptimizer(1e-5).minimize(loss_D, var_list = D_var)
+    opt_G = tf.train.AdamOptimizer(1e-5).minimize(loss_G, var_list = G_var)
     # opt_D = tf.train.AdamOptimizer(1e-4, beta1=0.382).minimize(loss_D)
     # opt_G = tf.train.AdamOptimizer(1e-3).minimize(loss_G, var_list = G_var)
-    # opt_D = tf.train.RMSPropOptimizer(1e-4).minimize(loss_D, var_list = D_var)
-    # opt_G = tf.train.RMSPropOptimizer(1e-4, momentum = 1e-8).minimize(loss_G, var_list = G_var)
+    # opt_D = tf.train.RMSPropOptimizer(1e-5).minimize(loss_D, var_list = D_var)
+    # opt_G = tf.train.RMSPropOptimizer(1e-5).minimize(loss_G, var_list = G_var)
     # opt_D = tf.train.GradientDescentOptimizer(1e-4).minimize(loss_D, var_list = D_var)
     # opt_G = tf.train.GradientDescentOptimizer(1e-4).minimize(loss_G, var_list = G_var)
     # opt_G = tf.train.AdadeltaOptimizer(1e-4).minimize(loss_G, var_list = G_var)
@@ -178,7 +201,8 @@ def main():
     
         sess.run(tf.global_variables_initializer())
         for iter in range(training_iter):
-            softdec =softdec_c * np.random.random()
+            softdec = softdec_c * np.random.random()
+            # softdec = 0 # turn off the onehot softness
             y = np.hstack([np.zeros([feed_in_G_sample_size,]) + softdec, np.ones([batch_size,]) - softdec]) #(fake, real), soft one-hots
             
             x, _ = mnist.train.next_batch(batch_size)
@@ -189,17 +213,17 @@ def main():
             # z = np.random.uniform(size = feed_in_G_sample_size * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim])
             
             ## strategy 1: update simultaneously
-            # _ = sess.run(opt_D, feed_dict={X:x, Y:y, Z:z}) 
-            # _ = sess.run(opt_G, feed_dict={X:x, Y:y, Z:z}) 
-            # cX, Closs_D, Closs_G = sess.run([gX, loss_D, loss_G], feed_dict={X:x, Y:y, Z:z}) 
+            _ = sess.run(opt_D, feed_dict={X:x, Y:y, Z:z}) 
+            _ = sess.run(opt_G, feed_dict={X:x, Y:y, Z:z}) 
+            cX, Closs_D, Closs_G = sess.run([gX, loss_D, loss_G], feed_dict={X:x, Y:y, Z:z}) 
             ## strategy 2: make D stroger but update less times
-            if iter % 30 == 0 : 
-               for D_iter in range(30):
-                   _ = sess.run(opt_D, feed_dict={X:x, Y:y, Z:z})
-                   z = np.random.normal(size = feed_in_G_sample_size * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim])
-                   x, _ = mnist.train.next_batch(batch_size)
-                   x = x.reshape([-1, 28, 28, 1])
-            Closs_D, Closs_G, _ = sess.run([loss_D, loss_G, opt_G], feed_dict={X:x, Y:y, Z:z})
+            #if iter % 100 == 0 : 
+            #   for D_iter in range(20):
+            #       _ = sess.run(opt_D, feed_dict={X:x, Y:y, Z:z})
+            #       z = np.random.normal(size = feed_in_G_sample_size * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim])
+            #       x, _ = mnist.train.next_batch(batch_size)
+            #       x = x.reshape([-1, 28, 28, 1])
+            #Closs_D, Closs_G, _ = sess.run([loss_D, loss_G, opt_G], feed_dict={X:x, Y:y, Z:z})
             ## strategy 3: update G more time (because G is hard to train)
             # for Gi in range(10):
                 # x, _ = mnist.train.next_batch(batch_size)
@@ -217,7 +241,7 @@ def main():
                 # y_f = np.hstack([np.ones([feed_in_G_sample_size,]), np.ones([batch_size,])]) #(fake, real)
                 # sess.run(opt_D, feed_dict={X:x, Y:y_f, Z:z}) 
             
-            if iter%500 == 0 :
+            if iter % 500 == 0 :
                 print('iteration:{} loss_D:{} loss_G:{}'.format(iter, Closs_D, Closs_G))
                 cX = sess.run(gX, feed_dict={X:x, Y:y, Z:z})
                 for gi in range(5):
