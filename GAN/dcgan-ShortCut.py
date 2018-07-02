@@ -2,12 +2,7 @@
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 import numpy as np
-# import matplotlib.pyplot as plt
 import scipy.misc as sm
-
-def lrelu(x, lamb = 0.2):
-    return tf.maximum(x, x*lamb)
-pass
 
 def mnist_select(mnist_obj, target_no, sample_no):
     cnt = 0
@@ -108,6 +103,15 @@ def minibatch_discrimonation_ind(sample_no, noize_dim, gw, gX):
     return mdl 
 pass
 
+def feature_map_upsampling(X, size, method=tf.image.ResizeMethod.BICUBIC):
+    PX = X * 1e10
+    PX = tf.cast(PX, tf.int32)
+    PX = tf.image.resize_images(PX, size, method)
+    PX = tf.cast(PX, tf.float32)
+    PX /= 1e10
+    return PX
+pass
+
 def G(Z,gw):
 ## this function is setted to generate a 28*28 digit picture
 ## from a normal distribution z
@@ -115,7 +119,8 @@ def G(Z,gw):
 ## 2 times with stride 2 to get 28*28 matrix
 
     activation_function = tf.nn.elu
-    # activation_function = lrelu
+    activation_function = tf.nn.leaky_relu
+    # activation_function = tf.nn.tanh
     dropout_keep_rate = 0.5
     
     Z = tf.convert_to_tensor(Z)
@@ -126,35 +131,55 @@ def G(Z,gw):
     
     # Z = tf.nn.tanh(Z)
     # Z = tf.layers.batch_normalization(Z)
-    g_conv1 = tf.nn.conv2d_transpose(      Z, gw['w1'], [batch_size,  2,  2,  1024], [1, 2, 2, 1], padding="SAME") + gw['b1'] # 2*2, 128 channels
+    g_conv1 = tf.nn.conv2d_transpose(      Z, gw['w1'], [batch_size,  2,  2,  512], [1, 2, 2, 1], padding="SAME") + gw['b1'] # 2*2, 128 channels
     g_conv1 = activation_function(g_conv1)
+    g_conv1 = tf.concat([g_conv1, feature_map_upsampling(Z, [2, 2], tf.image.ResizeMethod.NEAREST_NEIGHBOR)], 3)
+    # g_conv1 = (g_conv1 + tf.layers.conv2d(feature_map_upsampling(Z, [2, 2], tf.image.ResizeMethod.NEAREST_NEIGHBOR), 1, [1, 1], [1, 1], "SAME", trainable=False, activation=None, kernel_initializer=tf.constant_initializer(0.1)))/2
+    g_conv1 = tf.layers.conv2d(g_conv1, 512, [2, 2], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer(), dilation_rate=(1, 1))
+    g_conv1 = tf.layers.conv2d(g_conv1, 512, [2, 2], [1, 1], "SAME", trainable=True, activation=None, kernel_initializer=tf.contrib.layers.xavier_initializer(), dilation_rate=(2, 2))
+    g_conv1 = tf.layers.conv2d(g_conv1, 512, [2, 2], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer(), dilation_rate=(1, 1))
     # g_conv1 = tf.layers.conv2d(g_conv1, 1024, [2, 2], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
-    # g_conv1 = tf.layers.conv2d(g_conv1, 256, [2, 2], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
-    # g_conv1 = tf.layers.conv2d(g_conv1, 1024, [2, 2], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
-    # g_conv1 = tf.nn.dropout(g_conv1, dropout_keep_rate)
+    g_conv1 = tf.nn.dropout(g_conv1, dropout_keep_rate)
     # g_conv1 = tf.layers.batch_normalization(g_conv1)
-    g_conv2 = tf.nn.conv2d_transpose(g_conv1, gw['w2'], [batch_size,  4,  4,  512], [1, 2, 2, 1], padding="SAME") + gw['b2'] # 4*4, 64 channels
+    g_conv2 = tf.nn.conv2d_transpose(g_conv1, gw['w2'], [batch_size,  4,  4,  256], [1, 2, 2, 1], padding="SAME") + gw['b2'] # 4*4, 64 channels
     g_conv2 = activation_function(g_conv2)
-    # g_conv2 = tf.layers.conv2d(g_conv2, 512, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
-    g_conv2 = tf.layers.conv2d(g_conv2, 1024, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
+    g_conv2 = tf.concat([g_conv2, feature_map_upsampling(g_conv1, [4, 4], tf.image.ResizeMethod.NEAREST_NEIGHBOR)], 3)
+    # g_conv2 = (g_conv2 + tf.layers.conv2d(feature_map_upsampling(g_conv1, [4, 4], tf.image.ResizeMethod.NEAREST_NEIGHBOR), 1, [3, 3], [1, 1], "SAME", trainable=False, activation=None, kernel_initializer=tf.constant_initializer(0.1)))/2
+    g_conv2 = tf.layers.conv2d(g_conv2, 256, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer(), dilation_rate=(1, 1))
+    g_conv2 = tf.layers.conv2d(g_conv2, 256, [3, 3], [1, 1], "SAME", trainable=True, activation=None, kernel_initializer=tf.contrib.layers.xavier_initializer(), dilation_rate=(2, 2))
+    g_conv2 = tf.layers.conv2d(g_conv2, 256, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer(), dilation_rate=(1, 1))
+    g_conv2 = tf.layers.conv2d(g_conv2, 256, [3, 3], [1, 1], "SAME", trainable=True, activation=None, kernel_initializer=tf.contrib.layers.xavier_initializer(), dilation_rate=(3, 3))
+    g_conv2 = tf.layers.conv2d(g_conv2, 256, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer(), dilation_rate=(1, 1))
     g_conv2 = tf.nn.dropout(g_conv2, dropout_keep_rate)
-    g_conv2 = tf.layers.conv2d(g_conv2, 512, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
+    # g_conv2 = tf.layers.conv2d(g_conv2, 512, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
     # g_conv2 = tf.layers.batch_normalization(g_conv2)
-    g_conv3 = tf.nn.conv2d_transpose(g_conv2, gw['w3'], [batch_size,  7,  7,  256], [1, 2, 2, 1], padding="SAME") + gw['b3'] # 7*7, 32 channels
+    g_conv3 = tf.nn.conv2d_transpose(g_conv2, gw['w3'], [batch_size,  7,  7,  128], [1, 2, 2, 1], padding="SAME") + gw['b3'] # 7*7, 32 channels
     g_conv3 = activation_function(g_conv3)
-    # g_conv3 = tf.layers.conv2d(g_conv3, 256, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
-    g_conv3 = tf.layers.conv2d(g_conv3, 1024, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
+    g_conv3 = tf.concat([g_conv3, feature_map_upsampling(g_conv2, [7, 7], tf.image.ResizeMethod.NEAREST_NEIGHBOR)], 3)
+    # g_conv3 = (g_conv3 + tf.layers.conv2d(feature_map_upsampling(g_conv2, [7, 7], tf.image.ResizeMethod.NEAREST_NEIGHBOR), 1, [3, 3], [1, 1], "SAME", trainable=False, activation=None, kernel_initializer=tf.constant_initializer(0.1)))/2
+    g_conv3 = tf.layers.conv2d(g_conv3, 128, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
+    g_conv3 = tf.layers.conv2d(g_conv3, 128, [3, 3], [1, 1], "SAME", trainable=True, activation=None, kernel_initializer=tf.contrib.layers.xavier_initializer(), dilation_rate=(2, 2))
+    g_conv3 = tf.layers.conv2d(g_conv3, 128, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
+    g_conv3 = tf.layers.conv2d(g_conv3, 128, [3, 3], [1, 1], "SAME", trainable=True, activation=None, kernel_initializer=tf.contrib.layers.xavier_initializer(), dilation_rate=(3, 3))
+    g_conv3 = tf.layers.conv2d(g_conv3, 128, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
     g_conv3 = tf.nn.dropout(g_conv3, dropout_keep_rate)
-    g_conv3 = tf.layers.conv2d(g_conv3, 256, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
+    # g_conv3 = tf.layers.conv2d(g_conv3, 256, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
     # g_conv3 = tf.layers.batch_normalization(g_conv3)
-    g_conv4 = tf.nn.conv2d_transpose(g_conv3, gw['w4'], [batch_size, 14, 14,   128], [1, 2, 2, 1], padding="SAME") + gw['b4'] # 14*14, 32 channels
+    g_conv4 = tf.nn.conv2d_transpose(g_conv3, gw['w4'], [batch_size, 14, 14,   64], [1, 2, 2, 1], padding="SAME") + gw['b4'] # 14*14, 32 channels
     g_conv4 = activation_function(g_conv4)
+    g_conv4 = tf.concat([g_conv4, feature_map_upsampling(g_conv3, [14, 14], tf.image.ResizeMethod.NEAREST_NEIGHBOR)], 3)
+    # g_conv4 = (g_conv4 + tf.layers.conv2d(feature_map_upsampling(g_conv3, [14, 14], tf.image.ResizeMethod.NEAREST_NEIGHBOR), 1, [3, 3], [1, 1], "SAME", trainable=False, activation=None, kernel_initializer=tf.constant_initializer(0.1)))/2
+    g_conv4 = tf.layers.conv2d(g_conv4, 64, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
+    g_conv4 = tf.layers.conv2d(g_conv4, 64, [3, 3], [1, 1], "SAME", trainable=True, activation=None, kernel_initializer=tf.contrib.layers.xavier_initializer(), dilation_rate=(2, 2))
+    g_conv4 = tf.layers.conv2d(g_conv4, 64, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
+    g_conv4 = tf.layers.conv2d(g_conv4, 64, [3, 3], [1, 1], "SAME", trainable=True, activation=None, kernel_initializer=tf.contrib.layers.xavier_initializer(), dilation_rate=(3, 3))
+    g_conv4 = tf.layers.conv2d(g_conv4, 64, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
+    g_conv4 = tf.nn.dropout(g_conv4, dropout_keep_rate)
+    g_conv4 = tf.layers.conv2d(g_conv4, 64, [3, 3], [1, 1], "SAME", trainable=True, activation=None, kernel_initializer=tf.contrib.layers.xavier_initializer())
     # g_conv4 = tf.layers.conv2d(g_conv4, 128, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
-    # g_conv4 = tf.layers.conv2d(g_conv4, 1024, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
-    # g_conv4 = tf.nn.dropout(g_conv4, dropout_keep_rate)
-    # g_conv4 = tf.layers.conv2d(g_conv4, 128, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
-    g_conv4 = tf.layers.batch_normalization(g_conv4)
+    # g_conv4 = tf.layers.batch_normalization(g_conv4)
     g_conv5 = tf.nn.conv2d_transpose(g_conv4, gw['w5'], [batch_size, 28, 28,    1], [1, 2, 2, 1], padding="SAME") + gw['b5'] # 28*28, 1 channels
+    # g_conv5 = tf.concat([g_conv5, feature_map_upsampling(Z, [28, 28], tf.image.ResizeMethod.NEAREST_NEIGHBOR)], 3)
     # g_conv5 = activation_function(g_conv5)
     # g_conv5 = tf.layers.conv2d(g_conv5, 8, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
     # g_conv5 = tf.layers.conv2d(g_conv5, 1, [3, 3], [1, 1], "SAME", trainable=True, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
@@ -185,16 +210,15 @@ def W(reuse=True):
     # initializer = tf.random_normal
     with tf.variable_scope('Generator', reuse=reuse):
         gw = {
-            'w1' : tf.Variable(initializer([ 1,  1,  1024, 1024])),
-            # 'w1' : tf.Variable(tf.random_uniform([ 1,  1, 512,  1024])),
-            'b1' : tf.Variable(tf.zeros([1024])),
-            'w2' : tf.Variable(initializer([ 2,  2,   512, 1024])),
-            'b2' : tf.Variable(tf.zeros([512])),
-            'w3' : tf.Variable(initializer([ 3,  3,   256,  512])),
-            'b3' : tf.Variable(tf.zeros([256])),
-            'w4' : tf.Variable(initializer([ 5,  5,   128,  256])),
-            'b4' : tf.Variable(tf.zeros([128])),
-            'w5' : tf.Variable(initializer([ 7,  7,     1,  128])),
+            'w1' : tf.Variable(initializer([ 1,  1,  512, 1024])),
+            'b1' : tf.Variable(tf.zeros([512])),
+            'w2' : tf.Variable(initializer([ 2,  2,  256, 512])),
+            'b2' : tf.Variable(tf.zeros([256])),
+            'w3' : tf.Variable(initializer([ 3,  3,  128, 256])),
+            'b3' : tf.Variable(tf.zeros([128])),
+            'w4' : tf.Variable(initializer([ 5,  5,   64, 128])),
+            'b4' : tf.Variable(tf.zeros([64])),
+            'w5' : tf.Variable(initializer([ 7,  7,    1,  64])),
             'b5' : tf.Variable(tf.zeros([1])),
         }
     # initializer = tf.random_uniform
@@ -218,8 +242,8 @@ def W(reuse=True):
 
     
 def main():
-    batch_size = 8
-    enhance_G_sample_rate = 3
+    batch_size = 128
+    enhance_G_sample_rate = 0.0625
     training_iter = 500000
     noize_dim = 1024
     alpha = 1. # constant for weaking the D
@@ -263,13 +287,15 @@ def main():
     logits_4G = D(gX, dw)
     # focal loss, using the minibatch distrinimation result as focal. The weighs with large resutls are bad and will get large gradients.
     # loss_D = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=Y, logits=logits_4D) * tf.pow(tf.exp(-mbdl), 1))  
-    loss_D = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=Y, logits=logits_4D) * tf.pow(tf.exp(-mbdliD), 2)) 
+    # loss_D = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=Y, logits=logits_4D) * tf.pow(tf.exp(-mbdliD), 2))
+    loss_D = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=Y, logits=logits_4D) ) 
     # loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4G), logits=logits_4G) * tf.pow(tf.exp(mbdl), 1)) 
-    loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4G), logits=logits_4G) * tf.pow(tf.exp(mbdliG), 2))
+    # loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4G), logits=logits_4G) * tf.pow(tf.exp(mbdliG), 2))
+    loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4G), logits=logits_4G) )
     # regulize the loss 
     # loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4G), logits=logits_4G)) + 0.01 * mbdl
-    opt_D = tf.train.AdamOptimizer(1e-4, beta1=0.382).minimize(loss_D, var_list = D_var)
-    opt_G = tf.train.AdamOptimizer(1e-4, beta1=0.382).minimize(loss_G, var_list = G_var)
+    opt_D = tf.train.AdamOptimizer(0.001, beta1=0.1).minimize(loss_D, var_list = D_var)
+    opt_G = tf.train.AdamOptimizer(0.002, beta1=0.3).minimize(loss_G, var_list = G_var)
     # opt_D = tf.train.AdamOptimizer(1e-4, beta1=0.618).minimize(loss_D, var_list = D_var)
     # opt_G = tf.train.AdamOptimizer(1e-4, beta1=0.618).minimize(loss_G, var_list = G_var)
     # opt_D = tf.train.AdamOptimizer(1e-4, beta1=0.382).minimize(loss_D)
@@ -296,27 +322,60 @@ def main():
         for iter in range(training_iter):
             softdec = softdec_c * np.random.random()
             # softdec = 0 # turn off the onehot softness
-            y = np.hstack([np.zeros([feed_in_G_sample_size,]) + softdec, np.ones([batch_size,]) - softdec]) #(fake, real), soft one-hots
             
-            x, _ = mnist.train.next_batch(batch_size)
-            # x = mnist_select(mnist, int(iter/300) % 9, batch_size)
-            x = x.reshape([-1, 28, 28, 1])
-            x = (x - 0.5)/ 0.5 # normalize from -1 to 1
-            z = np.random.normal(size = feed_in_G_sample_size * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim])
-            # z = np.random.uniform(size = feed_in_G_sample_size * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim])
+            # y = np.hstack([np.zeros([feed_in_G_sample_size,]) + softdec, np.ones([batch_size,]) - softdec]) #(fake, real), soft one-hots
+            
+            # x, _ = mnist.train.next_batch(batch_size)
+            # # x = mnist_select(mnist, int(iter/300) % 9, batch_size) # this will enforce the number class in to the dataset
+            # x = x.reshape([-1, 28, 28, 1])
+            # x = (x - 0.5)/ 0.5 # normalize from -1 to 1
+            
+            # z = np.random.normal(size = feed_in_G_sample_size * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim])
+            # # z = np.random.uniform(size = feed_in_G_sample_size * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim])
             
             ## strategy 1: update simultaneously
+            #####
+            ## D should be trained using equal number of fake and real samples.
+            ## More training samples are also feeded into D than G when training.
+            ## During optimize G, if G generate less samples, the gradients would be more specific to G, 
+            ## and this make G can understand more about which parts should be modified.
+            ## So the strategy here uses few generated sample, but more real sample to D for getting the gradients.
+            #####
+            # train D
+            x, _ = mnist.train.next_batch(batch_size)
+            x = x.reshape([-1, 28, 28, 1])
+            x = (x - 0.5)/ 0.5 # normalize from -1 to 1
+            y = np.hstack([np.zeros([batch_size,]) + softdec, np.ones([batch_size,]) - softdec]) #(fake, real), soft one-hots
+            z = np.random.normal(size = batch_size * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim])
             _, CmbdliD = sess.run([opt_D, mbdliD], feed_dict={X:x, Y:y, Z:z}) 
+            
+            # train G
+            x, _ = mnist.train.next_batch(batch_size)
+            x = x.reshape([-1, 28, 28, 1])
+            x = (x - 0.5)/ 0.5 # normalize from -1 to 1
+            y = np.hstack([np.zeros([feed_in_G_sample_size,]) + softdec, np.ones([batch_size,]) - softdec]) #(fake, real), soft one-hots
+            z = np.random.normal(size = feed_in_G_sample_size * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim])
             _, CmbdliG = sess.run([opt_G, mbdliG], feed_dict={X:x, Y:y, Z:z}) 
+            
+            # get the output
             cX, Closs_D, Closs_G, Cmbdl = sess.run([gX, loss_D, loss_G, mbdl], feed_dict={X:x, Y:y, Z:z}) 
+            
             ## strategy 2: make D stroger but update less times
             # if iter % 100 == 0 : 
-              # for D_iter in range(20):
-                  # _ = sess.run(opt_D, feed_dict={X:x, Y:y, Z:z})
-                  # z = np.random.normal(size = feed_in_G_sample_size * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim])
-                  # x, _ = mnist.train.next_batch(batch_size)
-                  # x = x.reshape([-1, 28, 28, 1])
-            # Closs_D, Closs_G, _ = sess.run([loss_D, loss_G, opt_G], feed_dict={X:x, Y:y, Z:z})
+                # for D_iter in range(20):
+                    # x, _ = mnist.train.next_batch(batch_size)
+                    # x = x.reshape([-1, 28, 28, 1])
+                    # x = (x - 0.5)/ 0.5 # normalize from -1 to 1
+                    # z = np.random.normal(size = batch_size * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim])
+                    # y = np.hstack([np.zeros([batch_size,]) + softdec, np.ones([batch_size,]) - softdec]) #(fake, real), soft one-hots
+                    # _, CmbdliD = sess.run([opt_D, mbdliD], feed_dict={X:x, Y:y, Z:z}) 
+            # x, _ = mnist.train.next_batch(batch_size)
+            # x = x.reshape([-1, 28, 28, 1])
+            # x = (x - 0.5)/ 0.5 # normalize from -1 to 1
+            # y = np.hstack([np.zeros([feed_in_G_sample_size,]) + softdec, np.ones([batch_size,]) - softdec]) #(fake, real), soft one-hots
+            # z = np.random.normal(size = feed_in_G_sample_size * 1 * 1 * noize_dim).reshape([-1, 1, 1, noize_dim])
+            # _, CmbdliG = sess.run([opt_G, mbdliG], feed_dict={X:x, Y:y, Z:z}) 
+            # cX, Closs_D, Closs_G, Cmbdl = sess.run([gX, loss_D, loss_G, mbdl], feed_dict={X:x, Y:y, Z:z}) 
             ## strategy 3: update G more time (because G is hard to train)
             # for Gi in range(10):
                 # x, _ = mnist.train.next_batch(batch_size)
@@ -335,20 +394,21 @@ def main():
                 # sess.run(opt_D, feed_dict={X:x, Y:y_f, Z:z}) 
             
             if iter % 500 == 0 :
-                print('iteration:{} loss_D:{} loss_G:{} mbdliD:{} mbdliG:{} mbdl:{}'.format(iter, Closs_D, Closs_G, CmbdliD, CmbdliG, Cmbdl))
+                # print('iteration:{} loss_D:{} loss_G:{} mbdliD:{} mbdliG:{} mbdl:{}'.format(iter, Closs_D, Closs_G, CmbdliD, CmbdliG, Cmbdl))
+                print('iteration:{} loss_D:{} loss_G:{}'.format(iter, Closs_D, Closs_G))
                 cX = sess.run(gX, feed_dict={X:x, Y:y, Z:z})
                 for gi in range(5):
                     visg = (cX[gi].T + 1)/2
-                    visr = (x[gi].T + 1)/2
+                    # visr = (x[gi].T + 1)/2
                     visgp = np.vstack([visg, visg, visg]).T
                     visgp *= 255
                     visgp = sess.run(tf.image.resize_images(visgp,[64,64]))
-                    visrp = np.vstack([visr, visr, visr]).T
-                    visrp *= 255
+                    # visrp = np.vstack([visr, visr, visr]).T
+                    # visrp *= 255
                     visgp.astype(np.uint8)
                     sm.imsave('G/g{}_{}.jpg'.format(gi, iter),visgp)
-                    visrp.astype(np.uint8)
-                    sm.imsave('G/r{}_{}.jpg'.format(gi, iter),visrp)
+                    # visrp.astype(np.uint8)
+                    # sm.imsave('G/r{}_{}.jpg'.format(gi, iter),visrp)
             
     
     pass
@@ -361,3 +421,4 @@ if __name__=='__main__':
 
 # references
 # https://wiseodd.github.io/techblog/2016/09/17/gan-tensorflow/
+# https://adoberesearch.ctlprojects.com/wp-content/uploads/2018/04/CVPR2018_Paper3623_Chang.pdf
