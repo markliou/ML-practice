@@ -120,7 +120,9 @@ train_disc = optimizer_disc.minimize(disc_loss, var_list=disc_vars)
 init = tf.global_variables_initializer()
 
 # Start training
-with tf.Session() as sess:
+config = tf.ConfigProto()
+config.gpu_options.allow_growth=True
+with tf.Session(config=config) as sess:
 
     # Run the initializer
     sess.run(init)

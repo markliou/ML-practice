@@ -208,7 +208,7 @@ def G(Z, gw, trainable=True, reuse=True, training=True):
             # g_conv4 = tf.layers.batch_normalization(g_conv4, epsilon=1e-5, training=training)
             # g_conv4 = tf.layers.conv2d(g_conv4, 64, [7, 7], [1, 1], "SAME", trainable=trainable, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
             g_conv4 = tf.nn.dropout(g_conv4, dropout_keep_rate)
-            # g_conv4 = tf.concat([g_conv4, feature_map_upsampling(g_conv3, [14, 14], tf.image.ResizeMethod.NEAREST_NEIGHBOR)], 3)
+            g_conv4 = tf.concat([g_conv4, feature_map_upsampling(g_conv3, [14, 14], tf.image.ResizeMethod.NEAREST_NEIGHBOR)], 3)
             # g_conv4 = tf.layers.batch_normalization(g_conv4, epsilon=1e-5, training=training)
             g_conv4 = tf.layers.conv2d(g_conv4, 64, [7, 7], [1, 1], "SAME", trainable=trainable, activation=activation_function, kernel_initializer=tf.contrib.layers.xavier_initializer())
             g_conv4 = tf.layers.batch_normalization(g_conv4, epsilon=1e-5, training=training, renorm=True)
