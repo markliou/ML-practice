@@ -92,7 +92,9 @@ y_true = X
 
 # Define loss and optimizer, minimize the squared error
 loss = tf.reduce_mean(tf.pow(y_true - y_pred, 2))
-optimizer = tf.train.RMSPropOptimizer(learning_rate, momentum=0.).minimize(loss)
+# optimizer = tf.train.RMSPropOptimizer(learning_rate, momentum=0.).minimize(loss)
+optimizer = tf.train.AdamOptimizer(learning_rate).minimize(loss)
+#optimizer = tf.contrib.opt.AdamWOptimizer(weight_decay=1e-4, learning_rate=learning_rate).minimize(loss)
 
 # Initialize the variables (i.e. assign their default value)
 init = tf.global_variables_initializer()
@@ -102,7 +104,7 @@ init = tf.global_variables_initializer()
 # we try to use the AE with the same label.Uuse the fixed samples
 i = 0
 batch_x = []
-while i < 150 :
+while i < 5000 :
     m,l = mnist.train.next_batch(1)
     if np.argmax(l[0]) == 3:
         batch_x.append(m[0])

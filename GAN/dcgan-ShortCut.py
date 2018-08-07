@@ -347,6 +347,7 @@ def main():
     # loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4G), logits=logits_4G) )
     # loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4G), logits=logits_4G) )
     loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(logits_4Df), logits=logits_4Df) )
+    # loss_G = -tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.zeros_like(logits_4Df), logits=logits_4Df) )
     # loss_G = -tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.zeros_like(logits_4G), logits=logits_4G) )
     # loss_G = -tf.reduce_min(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.zeros_like(logits_4G), logits=logits_4G) )
     # loss_G = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.zeros_like(logits_4G), logits=logits_4G) )#https://github.com/soumith/ganhacks # 2-flip label
@@ -370,7 +371,7 @@ def main():
     # opt_G = tf.train.AdamOptimizer(1e-4, beta1=0.618).minimize(loss_G, var_list = G_var)
     # opt_D = tf.train.AdamOptimizer(1e-4, beta1=0.618).minimize(loss_D, var_list = D_var)
     # opt_G = tf.train.AdamOptimizer(1e-4, beta1=0.618).minimize(loss_G)
-    opt_D = tf.train.AdamOptimizer(1e-5, beta1=0.382).minimize(loss_D, var_list = D_var)
+    # opt_D = tf.train.AdamOptimizer(1e-5, beta1=0.382).minimize(loss_D, var_list = D_var)
     opt_G = tf.train.AdamOptimizer(1e-5, beta1=0.618).minimize(loss_G, var_list = G_var) 
     # opt_D = tf.train.AdamOptimizer(1e-4, beta1=0.382).minimize(loss_D)
     # opt_G = tf.train.AdamOptimizer(1e-3).minimize(loss_G, var_list = G_var)
@@ -384,7 +385,9 @@ def main():
     # opt_G = tf.train.AdagradOptimizer(1e-4).minimize(loss_G, var_list = G_var)
     # opt_D = tf.contrib.opt.NadamOptimizer(1e-5, beta1=0.382).minimize(loss_D, var_list = D_var)
     # opt_G = tf.contrib.opt.NadamOptimizer(1e-5, beta1=0.382).minimize(loss_G, var_list = G_var)
-
+    opt_D = tf.contrib.opt.AdamWOptimizer(weight_decay=1e-8, learning_rate=1e-5, beta1=0.618).minimize(loss_D, var_list = D_var)
+    # opt_G = tf.contrib.opt.AdamWOptimizer(weight_decay=1e-8, learning_rate=1e-5, beta1=0.618).minimize(loss_G, var_list = G_var)
+    
 
     ## start training
     config = tf.ConfigProto()
