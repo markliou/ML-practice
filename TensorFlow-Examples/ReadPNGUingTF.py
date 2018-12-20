@@ -9,11 +9,11 @@ import tensorflow as tf
 import numpy as np
 
 img_name = tf.placeholder(dtype=tf.string)
-img_str = tf.read_file(img_name)
+img_str = tf.read_file(img_name + '.png')
 img = tf.image.decode_png(img_str)
 
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
-    c_img = sess.run(img, feed_dict={img_name:'unnamed.png'})
+    c_img = sess.run(img, feed_dict={img_name:'unnamed'})
     print(c_img)
     print(c_img.shape)
