@@ -1,7 +1,7 @@
 import numpy as np 
 import tensorflow as tf 
 
-def Attention(Q, K, gamma = .5):
+def Attention(Q, K):
     '''
     Use simple dot product to get the attention. The variable names and 
     concepts are still deviative from "Attention is all you need".
@@ -15,10 +15,11 @@ def Attention(Q, K, gamma = .5):
     attention_map = tf.nn.softmax(attention_map, axis=1) # consider only the keys for attention
     attention = tf.reshape(Kf,[tf.shape(Kf)[0], tf.shape(Kf)[1], 1]) * attention_map 
     attention = tf.reduce_sum(attention, axis=1)
+    gamma = tf.get_variable("gamma", [1], initializer=tf.constant_initializer(0.0)) # set the gamma as learnable variable
     return tf.reshape(attention, tf.shape(Q)) * gamma + Q * (1 - gamma) # V
 pass 
 
-def self_spatial_attention(x, compression_channel_no = 16, gamma = .5):
+def self_spatial_attention(x, compression_channel_no = 16):
     '''
     This section is implemented according to SAGAN (https://arxiv.org/abs/1805.08318).
     The source code can also be found at http://www.twistedwg.com/2018/06/27/SAGAN-code.html .
@@ -37,6 +38,7 @@ def self_spatial_attention(x, compression_channel_no = 16, gamma = .5):
     beta = tf.nn.softmax(s, axis=-1)  # attention map
     o = tf.matmul(beta,tf.reshape(h, [tf.shape(x)[0], tf.shape(x)[1] * tf.shape(x)[2], tf.shape(x)[3]]))  # [bs, N, C]
     o = tf.reshape(o, shape=x.shape)  # [bs, h, w, C]
+    gamma = tf.get_variable("gamma", [1], initializer=tf.constant_initializer(0.0)) # set the gamma as learnable variable
     x = gamma * o + (1 - gamma) * x
     return x
 pass
