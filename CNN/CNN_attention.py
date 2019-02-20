@@ -1,7 +1,7 @@
 import numpy as np 
 import tensorflow as tf 
 
-def Attention(Q, K):
+def Attention(Q, K, name='att'):
     '''
     Use simple dot product to get the attention. The variable names and 
     concepts are still deviative from "Attention is all you need".
@@ -15,7 +15,7 @@ def Attention(Q, K):
     attention_map = tf.nn.softmax(attention_map, axis=1) # consider only the keys for attention
     attention = tf.reshape(Kf,[tf.shape(Kf)[0], tf.shape(Kf)[1], 1]) * attention_map 
     attention = tf.reduce_sum(attention, axis=1)
-    gamma = tf.get_variable("gamma", [1], initializer=tf.constant_initializer(0.0)) # set the gamma as learnable variable
+    gamma = tf.get_variable(name+"gamma", [1], initializer=tf.constant_initializer(0.0)) # set the gamma as learnable variable
     return tf.reshape(attention, tf.shape(Q)) * gamma + Q * (1 - gamma) # V
 pass 
 
@@ -48,11 +48,11 @@ def main():
     # use difference source and target 
     S = tf.zeros([10, 28, 28, 3])
     T = tf.zeros([10, 14, 14, 1024])
-    A = Attention(T, S)
+    A = Attention(T, S, 'att1')
     print(A) # output should have the same shape of T (10, 14, 14, 1024)
 
     # puting self as two inputs will be self-attention
-    A = Attention(T, T)
+    A = Attention(T, T, 'att2')
     print(A)
 
     # the attention from SAGAN
