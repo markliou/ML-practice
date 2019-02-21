@@ -16,7 +16,7 @@ def Attention(Q, K, name='att'):
     attention = tf.reshape(Kf,[tf.shape(Kf)[0], tf.shape(Kf)[1], 1]) * attention_map 
     attention = tf.reduce_sum(attention, axis=1)
     gamma = tf.get_variable(name+"att_gamma", [1], initializer=tf.constant_initializer(0.0)) # set the gamma as learnable variable
-    return tf.reshape(attention, tf.shape(Q)) * gamma + Q * (1 - gamma) # V
+    return tf.reshape(attention, tf.shape(Q)) * tf.nn.sigmoid(gamma) + Q * tf.nn.sigmoid(1 - gamma) # V
 pass 
 
 def self_spatial_attention(x, compression_channel_no = 16):
@@ -39,7 +39,7 @@ def self_spatial_attention(x, compression_channel_no = 16):
     o = tf.matmul(beta,tf.reshape(h, [tf.shape(x)[0], tf.shape(x)[1] * tf.shape(x)[2], tf.shape(x)[3]]))  # [bs, N, C]
     o = tf.reshape(o, shape=x.shape)  # [bs, h, w, C]
     gamma = tf.get_variable("gamma", [1], initializer=tf.constant_initializer(0.0)) # set the gamma as learnable variable
-    x = gamma * o + (1 - gamma) * x
+    x = o + gamma * x
     return x
 pass
 
