@@ -15,7 +15,7 @@ def Attention(Q, K, name='att'):
     attention_map = tf.nn.softmax(attention_map, axis=1) # consider only the keys for attention
     attention = tf.reshape(Kf,[tf.shape(Kf)[0], tf.shape(Kf)[1], 1]) * attention_map 
     attention = tf.reduce_sum(attention, axis=1)
-    gamma = tf.get_variable(name+"gamma", [1], initializer=tf.constant_initializer(0.0)) # set the gamma as learnable variable
+    gamma = tf.get_variable(name+"att_gamma", [1], initializer=tf.constant_initializer(0.0)) # set the gamma as learnable variable
     return tf.reshape(attention, tf.shape(Q)) * gamma + Q * (1 - gamma) # V
 pass 
 
