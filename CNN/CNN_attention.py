@@ -20,32 +20,32 @@ def Attention(Q, K, name='att'):
     return tf.reshape(attention, tf.shape(Q)) * tf.nn.sigmoid(gamma) + Q * tf.nn.sigmoid(1 - gamma) # V
 pass 
 
-# def Spatial_attention(Q, K, compression_channel_no = 16, name = 'satt'):
-#     '''
-#     Use simple dot product to get the attention. The variable names and 
-#     concepts are still deviative from "Attention is all you need".
-#     (https://arxiv.org/abs/1706.03762)
-#     The main idea of attention for convolution is from SAGAN 
-#     (https://arxiv.org/abs/1805.08318)
-#     Q and K have format of NHWC.
-#     '''
-#     # the query and key can be firstly transform to the same channel (This can also compress the information).
-#     Qm = tf.layers.conv2d(Q, compression_channel_no, [1,1], [1,1], padding="SAME", activation=tf.nn.elu, kernel_initializer=tf.keras.initializers.orthogonal(), name=name+'att_compressionQ')
-#     Km = tf.layers.conv2d(K, compression_channel_no, [1,1], [1,1], padding="SAME", activation=tf.nn.elu, kernel_initializer=tf.keras.initializers.orthogonal(), name=name+'att_compressionK')
-    
-#     Qf = tf.reshape(Qm, [-1, Qm.shape[1].value * Qm.shape[2].value, compression_channel_no])
-#     Kf = tf.reshape(Km, [-1, Km.shape[1].value * Km.shape[2].value, compression_channel_no])
-#     Qi = tf.reshape(Q, [-1, Q.shape[1].value * Q.shape[2].value, Q.shape[3].value])
-#     Ki = tf.reshape(K, [-1, K.shape[1].value * K.shape[2].value, K.shape[3].value])
+def Spatial_attention(Q, K, compression_channel_no = 16, name = 'satt'):
+    '''
+    Use simple dot product to get the attention. The variable names and 
+    concepts are still deviative from "Attention is all you need".
+    (https://arxiv.org/abs/1706.03762)
+    The main idea of attention for convolution is from SAGAN 
+    (https://arxiv.org/abs/1805.08318)
+    Q and K have format of NHWC.
+    '''
+    # the query and key can be firstly transform to the same channel (This can also compress the information).
+    Qm = tf.layers.conv2d(Q, compression_channel_no, [1,1], [1,1], padding="SAME", activation=tf.nn.elu, kernel_initializer=tf.keras.initializers.orthogonal(), name=name+'att_compressionQ')
+    Km = tf.layers.conv2d(K, compression_channel_no, [1,1], [1,1], padding="SAME", activation=tf.nn.elu, kernel_initializer=tf.keras.initializers.orthogonal(), name=name+'att_compressionK')
+    V  = tf.layers.conv2d(K, Q.shape[3].value, [1,1], [1,1], padding="SAME", activation=tf.nn.elu, kernel_initializer=tf.keras.initializers.orthogonal(), name=name+'att_V')
 
-#     attention_map = tf.matmul(Qf, Kf, transpose_b=True)  # [bs, N, N]
-#     attention_map = tf.nn.softmax(attention_map, axis=1) # consider only the keys for attention
-    
-#     attention = tf.matmul(attention_map, K)
+    Qf = tf.reshape(Qm, [-1, Qm.shape[1].value * Qm.shape[2].value, compression_channel_no])
+    Kf = tf.reshape(Km, [-1, Km.shape[1].value * Km.shape[2].value, compression_channel_no])
+    Vf = tf.reshape(Km, [-1,  V.shape[1].value  * V.shape[2].value, Q.shape[3].value])
 
-#     gamma = tf.get_variable(name+"satt_gamma", [1], initializer=tf.constant_initializer(0.0)) # set the gamma as learnable variable
-#     return tf.reshape(attention, tf.shape(Q)) * tf.nn.sigmoid(gamma) + Q * tf.nn.sigmoid(1 - gamma) # V
-# pass 
+    attention_map = tf.matmul(Qf, Kf, transpose_b=True)  # [bs, N, N]
+    attention_map = tf.nn.softmax(attention_map, axis=1) # consider only the keys for attention
+    
+    attention = tf.matmul(attention_map, Vf)
+
+    gamma = tf.get_variable(name+"satt_gamma", [1], initializer=tf.constant_initializer(0.0)) # set the gamma as learnable variable
+    return tf.reshape(attention, tf.shape(Q)) * tf.nn.sigmoid(gamma) + Q * tf.nn.sigmoid(1 - gamma) 
+pass 
 
 def self_spatial_attention(x, compression_channel_no = 16):
     '''
