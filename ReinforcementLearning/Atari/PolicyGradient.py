@@ -1,0 +1,111 @@
+import gym 
+import tensorflow as tf
+import numpy as np
+
+def conv2d(X, kernel_size = 3, stride_no = 1):
+    return tf.layers.conv2d(X, 32, 
+                               [kernel_size, kernel_size], 
+                               [stride_no, stride_no], 
+                               padding='SAME', 
+                               kernel_initializer=tf.keras.initializers.glorot_normal,
+                               activation=tf.nn.elu
+                               )
+pass
+
+def Q(S):
+    S = (S-128)/128 #(210, 160, 3)
+    conv1 = conv2d(S, stride_no=2) #(105, 80)
+    conv2 = conv2d(conv1, stride_no=2) #(53, 40)
+    conv3 = conv2d(conv2, stride_no=2) #(27, 20)
+    conv4 = conv2d(conv3, stride_no=2) #(14, 10)
+    conv5 = conv2d(conv4, stride_no=2) #(7, 5)
+    conv6 = conv2d(conv5, stride_no=2) #(4, 3)
+    
+    f1 = tf.layers.flatten(conv6)
+    f2 = tf.layers.dense(f1, 32, activation=tf.nn.elu)
+    out = tf.layers.dense(f2, 6)
+
+    return out
+pass
+
+# Enviroment settings
+STEP_LIMIT = 1000
+EPISODE = 1000
+EPSILONE = .05
+
+env = gym.make('SpaceInvaders-v0') 
+
+# Actor settings
+Opt_size = 32
+Act_S = tf.placeholder(tf.int8, [None, 210, 160, 3])
+Act_R = tf.placeholder(tf.float32, [None])
+Actions4Act = tf.placeholder(tf.uint8, [None])
+Actions4Act_oh = tf.one_hot(Actions4Act, 6) 
+
+Act_A = Q(Act_S)
+
+PL = Act_R * tf.log(Act_A * Actions4Act_oh)
+Opt = tf.contrib.opt.AdamWOptimizer(weight_decay=1E-4, learning_rate=1E-4).minimize(PL)
+
+sess = tf.Session()
+sess.run(tf.global_variables_initializer())
+
+episode = 0
+while(1):
+    episode += 1
+# for episode in range(EPISODE):
+    S = env.reset() #(210, 160, 3)
+    Clives = 3
+    Reward_cnt = 0
+    R_list, S_list = [],[]
+    
+    while(1):
+    # for step in range(STEP_LIMIT):
+        # env.render() # show the windows. If you don't need to monitor the state, just comment this.
+        # print(S)
+        
+        # A = env.action_space.sample() # random sampling the actions
+        # print(A)
+
+        # sampling action from Q
+        # epsilon greedy
+        if np.random.random() <= EPSILONE:
+            A = sess.run(tf.argmax(tf.nn.softmax(Act_A), axis=-1), feed_dict={Act_S:np.array(S).reshape([1, 210, 160, 3])})[0]
+        else:
+            A = np.random.randint(6)
+        pass
+        # print(A) # monitor the action
+
+        Sp = S
+        S, R, finish_flag, info = env.step(A)
+
+        Reward_cnt += R
+        # print('Reward:{}'.format(R)) # the reward will give this action will get how much scores. it's descreted.
+        # print('Info:{}'.format(info['ale.lives'])) # info in space invader will give the lives of the current state
+
+        if finish_flag or (Clives > info['ale.lives']):
+            Clives = info['ale.lives']
+            # print('This episode is finished ...')
+            sess.run(Opt, 
+                feed_dict={
+                          Act_S:np.array(Sp).reshape([-1, 210, 160, 3]),
+                          Act_R:np.array(-10).reshape([-1]),
+                          Actions4Act:np.array(A).reshape([-1])
+                          }
+                )
+            break
+        pass 
+        # TD
+        sess.run(Opt, 
+                feed_dict={
+                          Act_S:np.array(Sp).reshape([-1, 210, 160, 3]),
+                          Act_R:np.array(R).reshape([-1]),
+                          Actions4Act:np.array(A).reshape([-1])
+                          }
+                )
+
+    pass
+    print("Epi:{}  Score:{}".format(episode,Reward_cnt))
+
+
+pass
