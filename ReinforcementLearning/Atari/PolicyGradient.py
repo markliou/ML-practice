@@ -32,7 +32,8 @@ pass
 STEP_LIMIT = 1000
 EPISODE = 1000
 EPSILONE = .05
-REWARD_b = 0
+REWARD_b = 1e-1
+GAMMA = .95
 
 env = gym.make('SpaceInvaders-v0') 
 
@@ -45,8 +46,9 @@ Actions4Act_oh = tf.one_hot(Actions4Act, 6)
 
 Act_A = Q(Act_S)
 
-PL = (Act_R - REWARD_b) * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
-Opt = tf.contrib.opt.AdamWOptimizer(weight_decay=1E-4, learning_rate=1E-4).minimize(PL)
+# PL = (Act_R - REWARD_b) * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
+PL = (Act_R - REWARD_b) * tf.nn.softmax_cross_entropy_with_logits(labels=Actions4Act_oh, logits=Act_A)
+Opt = tf.train.RMSPropOptimizer(learning_rate=1E-2).minimize(PL)
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
@@ -58,11 +60,12 @@ while(1):
     S = env.reset() #(210, 160, 3)
     Clives = 3
     Reward_cnt = 0
+    CuReward = 0
     R_list, S_list = [],[]
     
     while(1):
     # for step in range(STEP_LIMIT):
-        # env.render() # show the windows. If you don't need to monitor the state, just comment this.
+        env.render() # show the windows. If you don't need to monitor the state, just comment this.
         # print(S)
         
         # A = env.action_space.sample() # random sampling the actions
@@ -81,6 +84,7 @@ while(1):
         S, R, finish_flag, info = env.step(A)
 
         Reward_cnt += R
+        CuReward = CuReward * GAMMA + R
         # print('Reward:{}'.format(R)) # the reward will give this action will get how much scores. it's descreted.
         # print('Info:{}'.format(info['ale.lives'])) # info in space invader will give the lives of the current state
 
@@ -90,17 +94,19 @@ while(1):
             sess.run(Opt, 
                 feed_dict={
                           Act_S:np.array(Sp).reshape([-1, 210, 160, 3]),
-                          Act_R:np.array(-10).reshape([-1]),
+                          Act_R:np.array(CuReward-10).reshape([-1]),
                           Actions4Act:np.array(A).reshape([-1])
                           }
                 )
-            break
+            if finish_flag:
+                break
+            pass
         pass 
         # TD
         Loss, _ = sess.run([PL, Opt], 
                             feed_dict={
                                     Act_S:np.array(Sp).reshape([-1, 210, 160, 3]),
-                                    Act_R:np.array(R).reshape([-1]),
+                                    Act_R:np.array(CuReward).reshape([-1]),
                                     Actions4Act:np.array(A).reshape([-1])
                                     }
                             )
