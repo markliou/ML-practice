@@ -36,7 +36,7 @@ def Spatial_attention(Q, K, compression_channel_no = 16, name = 'satt'):
 
     Qf = tf.reshape(Qm, [-1, Qm.shape[1].value * Qm.shape[2].value, compression_channel_no])
     Kf = tf.reshape(Km, [-1, Km.shape[1].value * Km.shape[2].value, compression_channel_no])
-    Vf = tf.reshape(Km, [-1,  V.shape[1].value  * V.shape[2].value, Q.shape[3].value])
+    Vf = tf.reshape(V, [-1,  V.shape[1].value  * V.shape[2].value, Q.shape[3].value])
 
     attention_map = tf.matmul(Qf, Kf, transpose_b=True)  # [bs, N, N]
     attention_map = tf.nn.softmax(attention_map, axis=1) # consider only the keys for attention
