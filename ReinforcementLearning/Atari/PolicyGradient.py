@@ -32,6 +32,7 @@ pass
 STEP_LIMIT = 1000
 EPISODE = 1000
 EPSILONE = .05
+REWARD_b = 0
 
 env = gym.make('SpaceInvaders-v0') 
 
@@ -44,7 +45,7 @@ Actions4Act_oh = tf.one_hot(Actions4Act, 6)
 
 Act_A = Q(Act_S)
 
-PL = Act_R * tf.log(Act_A * Actions4Act_oh)
+PL = (Act_R - REWARD_b) * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
 Opt = tf.contrib.opt.AdamWOptimizer(weight_decay=1E-4, learning_rate=1E-4).minimize(PL)
 
 sess = tf.Session()
@@ -96,16 +97,17 @@ while(1):
             break
         pass 
         # TD
-        sess.run(Opt, 
-                feed_dict={
-                          Act_S:np.array(Sp).reshape([-1, 210, 160, 3]),
-                          Act_R:np.array(R).reshape([-1]),
-                          Actions4Act:np.array(A).reshape([-1])
-                          }
-                )
+        Loss, _ = sess.run([PL, Opt], 
+                            feed_dict={
+                                    Act_S:np.array(Sp).reshape([-1, 210, 160, 3]),
+                                    Act_R:np.array(R).reshape([-1]),
+                                    Actions4Act:np.array(A).reshape([-1])
+                                    }
+                            )
+        # print('Action:{}  Loss:{}'.format(A, Loss))
 
     pass
-    print("Epi:{}  Score:{}".format(episode,Reward_cnt))
+    print("Epi:{}  Score:{}  Loss:{}".format(episode,Reward_cnt,Loss))
 
 
 pass
