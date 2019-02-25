@@ -13,7 +13,7 @@ def conv2d(X, kernel_size = 3, stride_no = 1):
 pass
 
 def Q(S):
-    S = (S-128)/128 #(210, 160, 3)
+    S = (tf.cast(S,tf.float32)-128)/128.  #(210, 160, 3)
     conv1 = conv2d(S, stride_no=2) #(105, 80)
     conv2 = conv2d(conv1, stride_no=2) #(53, 40)
     conv3 = conv2d(conv2, stride_no=2) #(27, 20)
@@ -32,8 +32,10 @@ pass
 STEP_LIMIT = 1000
 EPISODE = 1000
 EPSILONE = .05
-REWARD_b = 1e-1
-GAMMA = .95
+REWARD_b = 5
+GAMMA = .9
+DIE_PANELTY = 1000
+WARMING_EPI = 10
 
 env = gym.make('SpaceInvaders-v0') 
 
@@ -47,8 +49,8 @@ Actions4Act_oh = tf.one_hot(Actions4Act, 6)
 Act_A = Q(Act_S)
 
 # PL = (Act_R - REWARD_b) * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
-PL = (Act_R - REWARD_b) * tf.nn.softmax_cross_entropy_with_logits(labels=Actions4Act_oh, logits=Act_A)
-Opt = tf.train.RMSPropOptimizer(learning_rate=1E-2).minimize(PL)
+PL = Act_R * tf.nn.softmax_cross_entropy_with_logits(labels=Actions4Act_oh, logits=Act_A)
+Opt = tf.train.RMSPropOptimizer(learning_rate=1E-4, momentum=0.8, centered=True).minimize(PL)
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
@@ -63,7 +65,9 @@ while(1):
     CuReward = 0
     R_list, S_list = [],[]
     
+    steps = 0
     while(1):
+        steps += 1
     # for step in range(STEP_LIMIT):
         env.render() # show the windows. If you don't need to monitor the state, just comment this.
         # print(S)
@@ -73,7 +77,7 @@ while(1):
 
         # sampling action from Q
         # epsilon greedy
-        if np.random.random() <= EPSILONE:
+        if (np.random.random() >= EPSILONE) and (WARMING_EPI < episode):
             A = sess.run(tf.argmax(tf.nn.softmax(Act_A), axis=-1), feed_dict={Act_S:np.array(S).reshape([1, 210, 160, 3])})[0]
         else:
             A = np.random.randint(6)
@@ -84,33 +88,38 @@ while(1):
         S, R, finish_flag, info = env.step(A)
 
         Reward_cnt += R
-        CuReward = CuReward * GAMMA + R
+        # CuReward = CuReward * GAMMA + R
+        CuReward = CuReward * GAMMA + steps * .1 + R - REWARD_b
+
         # print('Reward:{}'.format(R)) # the reward will give this action will get how much scores. it's descreted.
         # print('Info:{}'.format(info['ale.lives'])) # info in space invader will give the lives of the current state
 
         if finish_flag or (Clives > info['ale.lives']):
             Clives = info['ale.lives']
+            CuReward -= DIE_PANELTY
             # print('This episode is finished ...')
             sess.run(Opt, 
                 feed_dict={
                           Act_S:np.array(Sp).reshape([-1, 210, 160, 3]),
-                          Act_R:np.array(CuReward-10).reshape([-1]),
+                          Act_R:np.array(CuReward).reshape([-1]),
                           Actions4Act:np.array(A).reshape([-1])
                           }
                 )
             if finish_flag:
                 break
+            else:
+                continue
             pass
         pass 
         # TD
         Loss, _ = sess.run([PL, Opt], 
                             feed_dict={
                                     Act_S:np.array(Sp).reshape([-1, 210, 160, 3]),
-                                    Act_R:np.array(CuReward).reshape([-1]),
+                                    Act_R:np.array(CuReward + steps * .5).reshape([-1]),
                                     Actions4Act:np.array(A).reshape([-1])
                                     }
                             )
-        # print('Action:{}  Loss:{}'.format(A, Loss))
+        print('Action:{}  Loss:{}'.format(A, Loss))
 
     pass
     print("Epi:{}  Score:{}  Loss:{}".format(episode,Reward_cnt,Loss))
