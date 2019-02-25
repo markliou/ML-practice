@@ -52,7 +52,7 @@ Act_A = Q(Act_S)
 # PL = Act_R * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
 PL = (Act_R/REWARD_NORMA) * tf.nn.softmax_cross_entropy_with_logits(labels=Actions4Act_oh, logits=Act_A)
 # Opt = tf.train.RMSPropOptimizer(learning_rate=1E-4, momentum=.8, centered=True).minimize(PL)
-Opt = tf.train.MomentumOptimizer(learning_rate=1E-2, momentum=.8).minimize(PL)
+Opt = tf.train.MomentumOptimizer(learning_rate=1E-5, momentum=.8).minimize(PL)
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
@@ -68,6 +68,11 @@ while(1):
     R_list, S_list = [],[]
     
     steps = 0
+    if (np.random.random() >= EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None)) and (WARMING_EPI < episode):
+        Greedy_flag = False 
+    else:
+        Greedy_flag = True 
+    pass
     while(1):
         steps += 1
     # for step in range(STEP_LIMIT):
@@ -79,19 +84,19 @@ while(1):
 
         # sampling action from Q
         # epsilon greedy
-        if (np.random.random() >= EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None)) and (WARMING_EPI < episode):
-            A = sess.run(tf.argmax(tf.nn.softmax(Act_A), axis=-1), feed_dict={Act_S:np.array(S).reshape([1, 210, 160, 3])})[0]
-        else:
+        if Greedy_flag:
             A = np.random.randint(6)
+        else:
+            A = sess.run(tf.argmax(tf.nn.softmax(Act_A), axis=-1), feed_dict={Act_S:np.array(S).reshape([1, 210, 160, 3])})[0]
         pass
         # print(A) # monitor the action
 
-        Sp = S
+        Sp = S.copy()
         S, R, finish_flag, info = env.step(A)
 
         Reward_cnt += R
         # CuReward = CuReward * GAMMA + R
-        CuReward = np.clip(CuReward * GAMMA + (Reward_cnt * .01 + R - REWARD_b), 0, None)
+        CuReward = CuReward * GAMMA + (Reward_cnt/steps + R - REWARD_b)
 
         # print('Reward:{}'.format(R)) # the reward will give this action will get how much scores. it's descreted.
         # print('Info:{}'.format(info['ale.lives'])) # info in space invader will give the lives of the current state
@@ -118,11 +123,11 @@ while(1):
         Loss, _ = sess.run([PL, Opt], 
                             feed_dict={
                                     Act_S:np.array(Sp).reshape([-1, 210, 160, 3]),
-                                    Act_R:np.array(CuReward + steps * .5).reshape([-1]),
+                                    Act_R:np.array(CuReward).reshape([-1]),
                                     Actions4Act:np.array(A).reshape([-1])
                                     }
                             )
-        print('Action:{}  Loss:{} Epsilon:{}'.format(A, Loss, EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None)))
+        print('Action:{}  Loss:{} Epsilon:{} greedy:{}'.format(A, Loss, EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None), Greedy_flag))
 
     pass
     print("Epi:{}  Score:{}  Loss:{}".format(episode,Reward_cnt,Loss))
