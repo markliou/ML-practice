@@ -31,10 +31,11 @@ pass
 # Enviroment settings
 STEP_LIMIT = 1000
 EPISODE = 1000
-EPSILONE = .05
+EPSILONE = 1.
 REWARD_b = 5
-GAMMA = .9
-DIE_PANELTY = 1000
+REWARD_NORMA = 500 # because the peak reward is close to 500, empiritically
+GAMMA = .95
+DIE_PANELTY = .2
 WARMING_EPI = 10
 
 env = gym.make('SpaceInvaders-v0') 
@@ -48,9 +49,10 @@ Actions4Act_oh = tf.one_hot(Actions4Act, 6)
 
 Act_A = Q(Act_S)
 
-# PL = (Act_R - REWARD_b) * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
-PL = Act_R * tf.nn.softmax_cross_entropy_with_logits(labels=Actions4Act_oh, logits=Act_A)
-Opt = tf.train.RMSPropOptimizer(learning_rate=1E-4, momentum=0.8, centered=True).minimize(PL)
+# PL = Act_R * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
+PL = (Act_R/REWARD_NORMA) * tf.nn.softmax_cross_entropy_with_logits(labels=Actions4Act_oh, logits=Act_A)
+# Opt = tf.train.RMSPropOptimizer(learning_rate=1E-4, momentum=.8, centered=True).minimize(PL)
+Opt = tf.train.MomentumOptimizer(learning_rate=1E-2, momentum=.8).minimize(PL)
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
@@ -77,7 +79,7 @@ while(1):
 
         # sampling action from Q
         # epsilon greedy
-        if (np.random.random() >= EPSILONE) and (WARMING_EPI < episode):
+        if (np.random.random() >= EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None)) and (WARMING_EPI < episode):
             A = sess.run(tf.argmax(tf.nn.softmax(Act_A), axis=-1), feed_dict={Act_S:np.array(S).reshape([1, 210, 160, 3])})[0]
         else:
             A = np.random.randint(6)
@@ -89,7 +91,7 @@ while(1):
 
         Reward_cnt += R
         # CuReward = CuReward * GAMMA + R
-        CuReward = CuReward * GAMMA + steps * .1 + R - REWARD_b
+        CuReward = np.clip(CuReward * GAMMA + (Reward_cnt * .01 + R - REWARD_b), 0, None)
 
         # print('Reward:{}'.format(R)) # the reward will give this action will get how much scores. it's descreted.
         # print('Info:{}'.format(info['ale.lives'])) # info in space invader will give the lives of the current state
@@ -97,6 +99,7 @@ while(1):
         if finish_flag or (Clives > info['ale.lives']):
             Clives = info['ale.lives']
             CuReward -= DIE_PANELTY
+            CuReward = np.clip(CuReward, 0, None)
             # print('This episode is finished ...')
             sess.run(Opt, 
                 feed_dict={
@@ -119,7 +122,7 @@ while(1):
                                     Actions4Act:np.array(A).reshape([-1])
                                     }
                             )
-        print('Action:{}  Loss:{}'.format(A, Loss))
+        print('Action:{}  Loss:{} Epsilon:{}'.format(A, Loss, EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None)))
 
     pass
     print("Epi:{}  Score:{}  Loss:{}".format(episode,Reward_cnt,Loss))
