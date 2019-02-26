@@ -11,9 +11,17 @@ import gym
 env = gym.make('SpaceInvaders-v0') 
 S = env.reset()
 
+# adjusting position of the agent
+for i in range(75):
+    env.render()
+    env.step(2)
+
+input()
+
 for step in range(1000):
-    # env.render() # show the windows. If you don't need to monitor the state, just comment this.
+    env.render() # show the windows. If you don't need to monitor the state, just comment this.
     # print(S)
+
     A = env.action_space.sample()
     print(A)
     S, R, finish_flag, info = env.step(A)

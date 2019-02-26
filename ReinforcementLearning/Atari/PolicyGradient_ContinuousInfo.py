@@ -78,10 +78,12 @@ while(1):
 
 
     S = env.reset() #(210, 160, 3)
+    [env.step(2) for i in range(75 + np.random.randint(10))] # adjust the initial position of the agent
     Clives = 3
     Reward_cnt = 0
     CuReward = 0
     R_list, S_list = [],[]
+
     
     steps = 0
     if (np.random.random() >= EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None)) and (WARMING_EPI < episode):
@@ -102,6 +104,8 @@ while(1):
         # epsilon greedy
         if Greedy_flag or (np.random.random() < .05):
             A = np.random.randint(6)
+        # elif (np.random.random() < .1):
+        #     A = 2 
         else:
             A = sess.run(tf.argmax(tf.nn.softmax(Act_A), axis=-1), feed_dict={
                                                                               Act_S: np.array(S).reshape([-1, 210, 160, 3]),
@@ -150,6 +154,7 @@ while(1):
             if finish_flag:
                 break
             else:
+                [env.step(2) for i in range(45 + np.random.randint(10))] # adjust the initial position of the agent
                 continue
             pass
         pass 
