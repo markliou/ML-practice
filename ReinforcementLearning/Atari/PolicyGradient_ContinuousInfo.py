@@ -65,7 +65,9 @@ PL = (Act_R/REWARD_NORMA) * tf.nn.softmax_cross_entropy_with_logits_v2(labels=Ac
 # Opt = tf.train.RMSPropOptimizer(learning_rate=1E-4, momentum=.8, centered=True).minimize(PL)
 Opt = tf.train.MomentumOptimizer(learning_rate=1E-6, momentum=.8).minimize(PL)
 
-sess = tf.Session()
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+sess = tf.Session(config=config)
 sess.run(tf.global_variables_initializer())
 
 episode = 0
