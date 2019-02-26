@@ -52,7 +52,7 @@ Act_A = Q(Act_S)
 # PL = Act_R * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
 PL = (Act_R/REWARD_NORMA) * tf.nn.softmax_cross_entropy_with_logits(labels=Actions4Act_oh, logits=Act_A)
 # Opt = tf.train.RMSPropOptimizer(learning_rate=1E-4, momentum=.8, centered=True).minimize(PL)
-Opt = tf.train.MomentumOptimizer(learning_rate=1E-5, momentum=.8).minimize(PL)
+Opt = tf.train.MomentumOptimizer(learning_rate=1E-6, momentum=.8).minimize(PL)
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
@@ -84,7 +84,7 @@ while(1):
 
         # sampling action from Q
         # epsilon greedy
-        if Greedy_flag:
+        if Greedy_flag or (np.random.random() < .05):
             A = np.random.randint(6)
         else:
             A = sess.run(tf.argmax(tf.nn.softmax(Act_A), axis=-1), feed_dict={Act_S:np.array(S).reshape([1, 210, 160, 3])})[0]
@@ -95,6 +95,10 @@ while(1):
         S, R, finish_flag, info = env.step(A)
 
         Reward_cnt += R
+        if Reward_cnt > REWARD_NORMA:
+            REWARD_NORMA = Reward_cnt
+        pass
+
         # CuReward = CuReward * GAMMA + R
         CuReward = CuReward * GAMMA + (Reward_cnt/steps + R - REWARD_b)
 
