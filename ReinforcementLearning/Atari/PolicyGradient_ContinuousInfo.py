@@ -5,17 +5,20 @@ import gym
 import tensorflow as tf
 import numpy as np
 
-def conv2d(X, kernel_size = 3, stride_no = 1):
+def conv2d(X, name, kernel_size = 3, stride_no = 1, reuse = False, trainable = True):
     return tf.layers.conv2d(X, 32, 
                                [kernel_size, kernel_size], 
                                [stride_no, stride_no], 
                                padding='SAME', 
                                kernel_initializer=tf.keras.initializers.glorot_normal,
-                               activation=tf.nn.elu
+                               activation=tf.nn.elu,
+                               name = name,
+                               trainable = trainable,
+                               reuse=reuse
                                )
 pass
 
-def Q(S, AH, SH):
+def Q(S, AH, SH, reuse=False, trainable = True):
     SH = tf.stack([tf.concat(tf.unstack(SH, axis=0), axis=-1)], axis=0)
 
     S = (tf.cast(S,tf.float32)-128)/128.  #(210, 160, 3)
@@ -23,24 +26,24 @@ def Q(S, AH, SH):
     AH = tf.reshape(AH, [-1, AH.shape[1] * AH.shape[2]]) #[None, 32, 6]
     AH = AH * 2 - 1
 
-    conv1 = conv2d(S, stride_no=2) #(105, 80)
-    conv2 = conv2d(conv1, stride_no=2) #(53, 40)
-    conv3 = conv2d(conv2, stride_no=2) #(27, 20)
-    conv4 = conv2d(conv3, stride_no=2) #(14, 10)
-    conv5 = conv2d(conv4, stride_no=2) #(7, 5)
-    conv6 = conv2d(conv5, stride_no=2) #(4, 3)
+    conv1 = conv2d(S, stride_no=2, reuse=reuse, trainable = trainable, name='conv1') #(105, 80)
+    conv2 = conv2d(conv1, stride_no=2, reuse=reuse, trainable = trainable, name='conv2') #(53, 40)
+    conv3 = conv2d(conv2, stride_no=2, reuse=reuse, trainable = trainable, name='conv3') #(27, 20)
+    conv4 = conv2d(conv3, stride_no=2, reuse=reuse, trainable = trainable ,name='conv4') #(14, 10)
+    conv5 = conv2d(conv4, stride_no=2, reuse=reuse, trainable = trainable, name='conv5') #(7, 5)
+    conv6 = conv2d(conv5, stride_no=2, reuse=reuse, trainable = trainable, name='conv6') #(4, 3)
 
-    conv1H = conv2d(SH, stride_no=2) #(105, 80)
-    conv2H = conv2d(conv1H, stride_no=2) #(53, 40)
-    conv3H = conv2d(conv2H, stride_no=2) #(27, 20)
-    conv4H = conv2d(conv3H, stride_no=2) #(14, 10)
-    conv5H = conv2d(conv4H, stride_no=2) #(7, 5)
-    conv6H = conv2d(conv5H, stride_no=2) #(4, 3)
+    conv1H = conv2d(SH, stride_no=2, reuse=reuse, trainable = trainable, name='conv1H') #(105, 80)
+    conv2H = conv2d(conv1H, stride_no=2, reuse=reuse, trainable = trainable, name='conv2H') #(53, 40)
+    conv3H = conv2d(conv2H, stride_no=2, reuse=reuse, trainable = trainable, name='conv3H') #(27, 20)
+    conv4H = conv2d(conv3H, stride_no=2, reuse=reuse, trainable = trainable, name='conv4H') #(14, 10)
+    conv5H = conv2d(conv4H, stride_no=2, reuse=reuse, trainable = trainable, name='conv5H') #(7, 5)
+    conv6H = conv2d(conv5H, stride_no=2, reuse=reuse, trainable = trainable, name='conv6H') #(4, 3)
     
     f1 = tf.layers.flatten(tf.concat([conv6,conv6H], axis=-1))
-    f2 = tf.layers.dense(tf.concat([f1, AH], axis=-1), 64, activation=tf.nn.elu)
-    f3 = tf.layers.dense(f2, 32, activation=tf.nn.elu)
-    out = tf.layers.dense(f3, 6)
+    f2 = tf.layers.dense(f1, 64, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f2')
+    f3 = tf.layers.dense(tf.concat([f2, AH], axis=-1), 32, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f3')
+    out = tf.layers.dense(f3, 6, trainable = trainable, reuse=reuse, name='out')
 
     return out
 pass
@@ -50,9 +53,9 @@ STEP_LIMIT = 1000
 EPISODE = 1000
 EPSILONE = 1.
 REWARD_b = .1
-REWARD_NORMA = 100 # because the peak reward is close to 500, empiritically
+REWARD_NORMA = 50 # because the peak reward is close to 500, empiritically
 GAMMA = .95
-DIE_PANELTY = 10.
+DIE_PANELTY = REWARD_NORMA/5.
 WARMING_EPI = 0
 
 env = gym.make('SpaceInvaders-v0') 
@@ -66,7 +69,8 @@ Sta_m = tf.placeholder(tf.int8, [action_memo, 210, 160, 3])
 Actions4Act = tf.placeholder(tf.uint8, [None])
 Actions4Act_oh = tf.one_hot(Actions4Act, 6) 
 
-Act_A = Q(Act_S, Act_m, Sta_m)
+Act_A = Q(Act_S, Act_m, Sta_m, trainable = True, reuse=False)
+Act_sample = tf.argmax(tf.nn.softmax(Act_A), axis=-1)[0]
 
 # PL = Act_R * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
 PL = (Act_R/REWARD_NORMA) * tf.nn.softmax_cross_entropy_with_logits_v2(labels=Actions4Act_oh, logits=Act_A)
@@ -89,9 +93,10 @@ while(1):
 
     S = env.reset() #(210, 160, 3)
     # [env.step(2) for i in range(75 + np.random.randint(10))] # adjust the initial position of the agent
+    [env.step(0) for i in range(75 + np.random.randint(10))] # skip the blank render
     Clives = 3
-    Reward_cnt = 0
-    CuReward = 0
+    Reward_cnt = 0.
+    CuReward = 0.
     R_list, S_list = [],[]
 
     
@@ -113,13 +118,17 @@ while(1):
         # sampling action from Q
         # epsilon greedy
         if Greedy_flag or (np.random.random() < .05):
+        # if False:
             A = np.random.randint(6)
         else:
-            A = sess.run(tf.argmax(tf.nn.softmax(Act_A), axis=-1), feed_dict={
-                                                                              Act_S: np.array(S).reshape([-1, 210, 160, 3]),
-                                                                              Act_m: np.array(act_h).reshape([-1, action_memo, 6]),
-                                                                              Sta_m: np.array(S_h).reshape([action_memo, 210, 160, 3])
-                                                                              })[0]
+            A = sess.run(Act_sample, feed_dict={
+                                                Act_S: np.array(S).reshape([-1, 210, 160, 3]),
+                                                Act_R: np.array(CuReward).reshape([-1]),
+                                                Act_m: np.array(act_h).reshape([-1, action_memo, 6]),
+                                                Sta_m: np.array(S_h).reshape([action_memo, 210, 160, 3]),
+                                                Actions4Act:np.array([0]).reshape([-1])
+                                                }
+                        )
                                                                               
         pass
         # print(A) # monitor the action
@@ -151,19 +160,29 @@ while(1):
             CuReward -= DIE_PANELTY
             # CuReward = np.clip(CuReward, 0, None)
             # print('This episode is finished ...')
-            sess.run(Opt, 
-                feed_dict={
-                          Act_S: np.array(Sp).reshape([-1, 210, 160, 3]),
-                          Act_R: np.array(CuReward).reshape([-1]),
-                          Act_m: np.array(act_h).reshape([-1, action_memo, 6]),
-                          Sta_m: np.array(S_h).reshape([action_memo, 210, 160, 3]),
-                          Actions4Act:np.array(A).reshape([-1])
-                          }
-                )
+
+            ## panelize the death state and all the states would cause to die
+            for death_rec in range(action_memo):
+                Sp = S_h.pop()
+                S_h = [ [ [ [0 for i in range(3)] for j in range(160)] for k in range(210)] ] + S_h
+                A = np.argmax(act_h.pop())
+                act_h = [[0. for i in range(6)]] + act_h
+                sess.run(Opt, 
+                        feed_dict={
+                                    Act_S: np.array(Sp).reshape([-1, 210, 160, 3]),
+                                    Act_R: np.array(CuReward).reshape([-1]),
+                                    Act_m: np.array(act_h).reshape([-1, action_memo, 6]),
+                                    Sta_m: np.array(S_h).reshape([action_memo, 210, 160, 3]),
+                                    Actions4Act:np.array(A).reshape([-1])
+                                }
+                        )
+            pass
+
             if finish_flag:
                 break
             else:
                 # [env.step(2) for i in range(45 + np.random.randint(10))] # adjust the initial position of the agent
+                [env.step(0) for i in range(40 + np.random.randint(10))] # skip the blank render
                 continue
             pass
         pass 
@@ -171,13 +190,13 @@ while(1):
         # TD
         Loss, _ = sess.run([PL, Opt], 
                             feed_dict={
-                                    Act_S: np.array(Sp).reshape([-1, 210, 160, 3]),
-                                    Act_R: np.array(CuReward).reshape([-1]),
-                                    Act_m: np.array(act_h).reshape([-1, action_memo, 6]),
-                                    Sta_m: np.array(S_h).reshape([action_memo, 210, 160, 3]),
-                                    Actions4Act:np.array(A).reshape([-1])
-                                    }
-                            )
+                                       Act_S: np.array(Sp).reshape([-1, 210, 160, 3]),
+                                       Act_R: np.array(CuReward).reshape([-1]),
+                                       Act_m: np.array(act_h).reshape([-1, action_memo, 6]),
+                                       Sta_m: np.array(S_h).reshape([action_memo, 210, 160, 3]),
+                                       Actions4Act:np.array(A).reshape([-1])
+                                      }
+                           )
         print('Action:{}  Loss:{} Epsilon:{} greedy:{}'.format(A, Loss, EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None), Greedy_flag))
 
     pass
