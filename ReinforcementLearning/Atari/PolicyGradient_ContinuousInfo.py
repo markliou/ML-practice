@@ -17,8 +17,9 @@ pass
 
 def Q(S, AH, SH):
     SH = tf.stack([tf.concat(tf.unstack(SH, axis=0), axis=-1)], axis=0)
-    S = tf.concat([S, SH], axis=-1)
+
     S = (tf.cast(S,tf.float32)-128)/128.  #(210, 160, 3)
+    SH = (tf.cast(SH,tf.float32)-128)/128.
     AH = tf.reshape(AH, [-1, AH.shape[1] * AH.shape[2]]) #[None, 32, 6]
     AH = AH * 2 - 1
 
@@ -28,8 +29,15 @@ def Q(S, AH, SH):
     conv4 = conv2d(conv3, stride_no=2) #(14, 10)
     conv5 = conv2d(conv4, stride_no=2) #(7, 5)
     conv6 = conv2d(conv5, stride_no=2) #(4, 3)
+
+    conv1H = conv2d(SH, stride_no=2) #(105, 80)
+    conv2H = conv2d(conv1H, stride_no=2) #(53, 40)
+    conv3H = conv2d(conv2H, stride_no=2) #(27, 20)
+    conv4H = conv2d(conv3H, stride_no=2) #(14, 10)
+    conv5H = conv2d(conv4H, stride_no=2) #(7, 5)
+    conv6H = conv2d(conv5H, stride_no=2) #(4, 3)
     
-    f1 = tf.layers.flatten(conv6)
+    f1 = tf.layers.flatten(tf.concat([conv6,conv6H], axis=-1))
     f2 = tf.layers.dense(tf.concat([f1, AH], axis=-1), 64, activation=tf.nn.elu)
     f3 = tf.layers.dense(f2, 32, activation=tf.nn.elu)
     out = tf.layers.dense(f3, 6)
@@ -41,16 +49,16 @@ pass
 STEP_LIMIT = 1000
 EPISODE = 1000
 EPSILONE = 1.
-REWARD_b = 10
-REWARD_NORMA = 500 # because the peak reward is close to 500, empiritically
-GAMMA = .9
-DIE_PANELTY = .2
-WARMING_EPI = 10
+REWARD_b = .1
+REWARD_NORMA = 100 # because the peak reward is close to 500, empiritically
+GAMMA = .95
+DIE_PANELTY = 10.
+WARMING_EPI = 0
 
 env = gym.make('SpaceInvaders-v0') 
 
 # Actor settings
-action_memo = 128
+action_memo = 64
 Act_S = tf.placeholder(tf.int8, [None, 210, 160, 3])
 Act_R = tf.placeholder(tf.float32, [None])
 Act_m = tf.placeholder(tf.float32, [None, action_memo, 6])
@@ -69,9 +77,9 @@ config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
 sess.run(tf.global_variables_initializer())
+sess.graph.finalize() 
 
 episode = 0
-# act_h = [ [0. for j in range(6)] for i in range(action_memo)]
 while(1):
 # for episode in range(EPISODE):    
     episode += 1
@@ -80,7 +88,7 @@ while(1):
 
 
     S = env.reset() #(210, 160, 3)
-    [env.step(2) for i in range(75 + np.random.randint(10))] # adjust the initial position of the agent
+    # [env.step(2) for i in range(75 + np.random.randint(10))] # adjust the initial position of the agent
     Clives = 3
     Reward_cnt = 0
     CuReward = 0
@@ -106,8 +114,6 @@ while(1):
         # epsilon greedy
         if Greedy_flag or (np.random.random() < .05):
             A = np.random.randint(6)
-        # elif (np.random.random() < .1):
-        #     A = 2 
         else:
             A = sess.run(tf.argmax(tf.nn.softmax(Act_A), axis=-1), feed_dict={
                                                                               Act_S: np.array(S).reshape([-1, 210, 160, 3]),
@@ -115,6 +121,7 @@ while(1):
                                                                               Sta_m: np.array(S_h).reshape([action_memo, 210, 160, 3])
                                                                               })[0]
                                                                               
+        pass
         # print(A) # monitor the action
         
         # handling the state-action recorders
@@ -122,7 +129,7 @@ while(1):
         A_oh[A] = 1.
         act_h = [A_oh] + act_h
         act_h.pop()
-        S_h = [S] + S_h
+        S_h = [S.copy()] + S_h
         S_h.pop()
 
         Sp = S.copy()
@@ -134,7 +141,7 @@ while(1):
         pass
 
         # CuReward = CuReward * GAMMA + R
-        CuReward = CuReward * GAMMA + (Reward_cnt/steps + R - REWARD_b)
+        CuReward = CuReward * GAMMA + (R - REWARD_b)
 
         # print('Reward:{}'.format(R)) # the reward will give this action will get how much scores. it's descreted.
         # print('Info:{}'.format(info['ale.lives'])) # info in space invader will give the lives of the current state
@@ -156,7 +163,7 @@ while(1):
             if finish_flag:
                 break
             else:
-                [env.step(2) for i in range(45 + np.random.randint(10))] # adjust the initial position of the agent
+                # [env.step(2) for i in range(45 + np.random.randint(10))] # adjust the initial position of the agent
                 continue
             pass
         pass 
@@ -174,7 +181,7 @@ while(1):
         print('Action:{}  Loss:{} Epsilon:{} greedy:{}'.format(A, Loss, EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None), Greedy_flag))
 
     pass
-    print("Epi:{}  Score:{}  Loss:{}".format(episode,Reward_cnt,Loss))
+    print("Epi:{}  Score:{}  Loss:{} greedy:{}".format(episode,Reward_cnt,Loss,Greedy_flag))
 
 
 pass
