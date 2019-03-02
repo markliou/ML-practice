@@ -32,10 +32,10 @@ pass
 STEP_LIMIT = 1000
 EPISODE = 1000
 EPSILONE = 1.
-REWARD_b = 5
+REWARD_b = 1
 REWARD_NORMA = 500 # because the peak reward is close to 500, empiritically
 GAMMA = .95
-DIE_PANELTY = .2
+DIE_PANELTY = 10
 WARMING_EPI = 10
 
 env = gym.make('SpaceInvaders-v0') 
@@ -96,8 +96,11 @@ while(1):
 
         Reward_cnt += R
         if Reward_cnt > REWARD_NORMA:
-            REWARD_NORMA = Reward_cnt
+            REWARD_NORMA = (Reward_cnt + REWARD_NORMA)/2
         pass
+
+        # check the history of action
+        
 
         # CuReward = CuReward * GAMMA + R
         CuReward = CuReward * GAMMA + (Reward_cnt/steps + R - REWARD_b)
@@ -108,7 +111,7 @@ while(1):
         if finish_flag or (Clives > info['ale.lives']):
             Clives = info['ale.lives']
             CuReward -= DIE_PANELTY
-            CuReward = np.clip(CuReward, 0, None)
+            # CuReward = np.clip(CuReward, 0, None)
             # print('This episode is finished ...')
             sess.run(Opt, 
                 feed_dict={
