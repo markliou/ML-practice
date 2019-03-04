@@ -18,13 +18,15 @@ def conv2d(X, name, kernel_size = 3, stride_no = 1, reuse = False, trainable = T
                                )
 pass
 
-def Q(S, AH, SH, reuse=False, trainable = True):
+def Q(S, AH, SH, Li, reuse=False, trainable = True):
     
     S = (tf.cast(S,tf.float32)-128)/128.  #(210, 160, 3)
     SH = tf.stack([tf.concat(tf.unstack(SH, axis=0), axis=-1)], axis=0)
     SH = (tf.cast(SH,tf.float32)-128)/128.
     AH = tf.reshape(AH, [-1, AH.shape[1] * AH.shape[2]]) #[None, 32, 6]
     AH = AH * 2 - 1
+    Li -= 2
+    Li = tf.reshape(Li,[-1, 1])
 
     conv1 = conv2d(tf.concat([S, SH], axis=-1), stride_no=2, reuse=reuse, trainable = trainable, name='conv1') #(105, 80)
     conv2 = conv2d(conv1, stride_no=2, reuse=reuse, trainable = trainable, name='conv2') #(53, 40)
@@ -34,7 +36,7 @@ def Q(S, AH, SH, reuse=False, trainable = True):
     conv6 = conv2d(conv5, stride_no=2, reuse=reuse, trainable = trainable, name='conv6') #(4, 3)
     
     f1 = tf.layers.flatten(conv6)
-    f2 = tf.layers.dense(tf.concat([f1, AH], axis=-1), 64, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f2')
+    f2 = tf.layers.dense(tf.concat([f1, AH, Li], axis=-1), 64, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f2')
     f3 = tf.layers.dense(f2, 32, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f3')
     out = tf.layers.dense(f3, 6, trainable = trainable, reuse=reuse, name='out')
 
@@ -44,7 +46,7 @@ pass
 def KL_div_with_normal(X):
     ## X with the shape of (n, l)
     X = np.sum(X, axis=0)/X.shape[0]
-    return np.clip(np.sum(X * (np.log(X+1E-9) - np.log(1/X.shape[0]))), 0, None)
+    return np.clip(np.sum(X * (np.log(X+1E-20) - np.log(1/X.shape[0]))), 0, None)
 pass
 
 # Enviroment settings
@@ -54,28 +56,31 @@ EPSILONE = 1.
 REWARD_b = .01
 REWARD_NORMA = 50 # because the peak reward is close to 500, empiritically
 GAMMA = .95
-DIE_PANELTY = .5
+DIE_PANELTY = REWARD_NORMA
 WARMING_EPI = 0
+UPDATE = 0
 
 env = gym.make('SpaceInvaders-v0') 
 
 # Actor settings
 action_memo = 64
-score_delay = 32
+score_delay = 64
 Act_S = tf.placeholder(tf.int8, [None, 210, 160, 3])
 Act_R = tf.placeholder(tf.float32, [None])
 Act_m = tf.placeholder(tf.float32, [None, action_memo, 6])
 Sta_m = tf.placeholder(tf.int8, [action_memo, 210, 160, 3])
 RewardNorma = tf.placeholder(tf.float32)
 Actions4Act = tf.placeholder(tf.uint8, [None])
+Act_clive = tf.placeholder(tf.float32, [None])
 Actions4Act_oh = tf.one_hot(Actions4Act, 6) 
 
-Act_A = Q(Act_S, Act_m, Sta_m, trainable = True, reuse=False) # give the current state, action history and state history
+Act_A = Q(Act_S, Act_m, Sta_m, Act_clive, trainable = True, reuse=False) # give the current state, action history and state history
 Act_sample = tf.argmax(tf.nn.softmax(Act_A), axis=-1)[0]
 
 # PL = Act_R * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
 PL = (Act_R/RewardNorma) * tf.nn.softmax_cross_entropy_with_logits_v2(labels=Actions4Act_oh, logits=Act_A)
-Opt = tf.train.RMSPropOptimizer(learning_rate=1E-5, momentum=.8, centered=True).minimize(PL)
+# Opt = tf.train.RMSPropOptimizer(learning_rate=1E-6, momentum=.8, centered=True).minimize(PL)
+Opt = tf.contrib.opt.AdamWOptimizer(1E-4, 1E-5).minimize(PL)
 # Opt = tf.train.MomentumOptimizer(learning_rate=1E-4, momentum=.8).minimize(PL)
 
 config = tf.ConfigProto()
@@ -110,7 +115,7 @@ while(1):
     while(1):
         steps += 1
     # for step in range(STEP_LIMIT):
-        #env.render() # show the windows. If you don't need to monitor the state, just comment this.
+        # env.render() # show the windows. If you don't need to monitor the state, just comment this.
         # print(S)
         
         # A = env.action_space.sample() # random sampling the actions
@@ -131,6 +136,7 @@ while(1):
                                                 Act_S: np.array(S).reshape([-1, 210, 160, 3]),
                                                 Act_m: np.array(act_hp).reshape([-1, action_memo, 6]),
                                                 Sta_m: np.array(S_hp),
+                                                Act_clive: np.array([Clives]),
                                                 Actions4Act:np.array([0]).reshape([-1])
                                                 }
                         )
@@ -160,40 +166,38 @@ while(1):
         # print(KL_A)
 
         # CuReward = CuReward * GAMMA + R
-        CuReward = CuReward * GAMMA + (R - REWARD_b) - KL_A * .5
+        CuReward = CuReward * GAMMA + (R - REWARD_b) - KL_A 
+        # CuReward = R - REWARD_b * .1 - KL_A
         
 
         # print('Reward:{}'.format(R)) # the reward will give this action will get how much scores. it's descreted.
         # print('Info:{}'.format(info['ale.lives'])) # info in space invader will give the lives of the current state
 
         if finish_flag or (Clives > info['ale.lives']):
+        # if False:
             Clives = info['ale.lives']
             
             # CuReward = np.clip(CuReward, 0, None)
             # print('This episode is finished ...')
 
-            ## panelize the death state and all the states would cause to die
-            S_hp = S_h[0:action_memo].copy()
-            act_hp = act_h[0:action_memo].copy()
-            S_hp.reverse()
-            act_hp.reverse()
-            CuReward = -DIE_PANELTY
-            for death_rec in range(action_memo):
-                # CuReward -= DIE_PANELTY
-                Sp = S_hp.pop()
-                S_hp = [ [ [ [0 for i in range(3)] for j in range(160)] for k in range(210)] ] + S_hp
-                A = np.argmax(act_hp.pop())
-                act_hp = [[0. for i in range(6)]] + act_hp
-                sess.run(Opt, 
-                        feed_dict={
-                                    Act_S: np.array(Sp).reshape([-1, 210, 160, 3]),
-                                    Act_R: np.array(CuReward).reshape([-1]),
-                                    Act_m: np.array(act_hp).reshape([-1, action_memo, 6]),
-                                    Sta_m: np.array(S_hp),
-                                    RewardNorma:REWARD_NORMA,
-                                    Actions4Act:np.array(A).reshape([-1])
-                                }
-                        )
+            # ### panelize the death state and all the states would cause to die
+            Sp = S_h[score_delay].copy()
+            S_hp = S_h[score_delay : score_delay+action_memo].copy()
+            Ap = np.argmax(act_h[score_delay].copy())
+            act_hp = act_h[score_delay : score_delay+action_memo].copy()
+
+            for i in range(5):
+                Loss, _ = sess.run([PL, Opt], 
+                                    feed_dict={
+                                            Act_S: np.array(Sp).reshape([-1, 210, 160, 3]),
+                                            Act_R: np.array(-DIE_PANELTY).reshape([-1]),
+                                            Act_m: np.array(act_hp).reshape([-1, action_memo, 6]),
+                                            Sta_m: np.array(S_hp),
+                                            Act_clive: np.array([Clives]),
+                                            RewardNorma:REWARD_NORMA,
+                                            Actions4Act:np.array(Ap).reshape([-1])
+                                            }
+                                )
             pass
 
             if finish_flag:
@@ -221,14 +225,16 @@ while(1):
             Loss, _ = sess.run([PL, Opt], 
                                 feed_dict={
                                         Act_S: np.array(Sp).reshape([-1, 210, 160, 3]),
-                                        Act_R: np.array(np.sum(delay_CuReward)).reshape([-1]),
+                                        Act_R: np.array(np.clip(np.sum(delay_CuReward), -REWARD_NORMA * .5, None)).reshape([-1]),
                                         Act_m: np.array(act_hp).reshape([-1, action_memo, 6]),
                                         Sta_m: np.array(S_hp),
+                                        Act_clive: np.array([Clives]),
                                         RewardNorma:REWARD_NORMA,
                                         Actions4Act:np.array(Ap).reshape([-1])
                                         }
                             )
-            print('Action:{}  Loss:{} Epsilon:{} greedy:{} Score:{}'.format(A, Loss, EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None), Greedy_flag, Reward_cnt))
+            UPDATE += 1
+            print('Action:{}  Loss:{} Epsilon:{} greedy:{} Score:{} Update:{}'.format(A, Loss, EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None), Greedy_flag, Reward_cnt, UPDATE))
         pass
 
     pass
