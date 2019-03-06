@@ -55,6 +55,7 @@ EPISODE = 1000
 EPSILONE = 1.
 REWARD_b = .5 
 REWARD_NORMA = 50 # because the peak reward is close to 500, empiritically
+STEP_NORMA = 1
 GAMMA = .9
 DIE_PANELTY = REWARD_NORMA
 WARMING_EPI = 0
@@ -63,8 +64,8 @@ UPDATE = 0
 env = gym.make('SpaceInvaders-v0') 
 
 # Actor settings
-action_memo = 32
-score_delay = 2
+action_memo = 64
+score_delay = 32
 td_batch = 16
 Act_S = tf.placeholder(tf.int8, [None, 210, 160, 3])
 Act_R = tf.placeholder(tf.float32, [None])
@@ -126,6 +127,9 @@ while(1):
     pass
     while(1):
         steps += 1
+        if STEP_NORMA < steps:
+            STEP_NORMA = steps
+        pass 
     # for step in range(STEP_LIMIT):
         # env.render() # show the windows. If you don't need to monitor the state, just comment this.
         # print(S)
@@ -136,7 +140,8 @@ while(1):
         # sampling action from Q
         # epsilon greedy
         # if Greedy_flag or (np.random.random() < .05):
-        if np.random.random() < .05:
+        # if np.random.random() < .05:
+        if np.random.random() < (1/td_batch) :
         # if False:
             A = np.random.randint(6)
         else:
@@ -180,7 +185,7 @@ while(1):
 
         # CuReward = CuReward * GAMMA + R
         # CuReward = CuReward * GAMMA + (R - REWARD_b) - KL_A + Reward_cnt/steps
-        CuReward = CuReward * GAMMA + (R - REWARD_b) + Reward_cnt/steps
+        CuReward = CuReward * GAMMA + (R - REWARD_b * (3 - Clives)) + Reward_cnt/steps + steps/STEP_NORMA - KL_A * .1
         # CuReward = CuReward * GAMMA + (R - REWARD_b)
         # CuReward = R - REWARD_b 
         
