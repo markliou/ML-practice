@@ -6,7 +6,7 @@ import tensorflow as tf
 import numpy as np
 
 def conv2d(X, name, kernel_size = 3, stride_no = 1, reuse = False, trainable = True):
-    return tf.layers.conv2d(X, 32, 
+    return tf.layers.conv2d(X, 128, 
                                [kernel_size, kernel_size], 
                                [stride_no, stride_no], 
                                padding='SAME', 
@@ -65,7 +65,7 @@ env = gym.make('SpaceInvaders-v0')
 
 # Actor settings
 action_memo = 64
-score_delay = 32
+score_delay = 1
 td_batch = 16
 Act_S = tf.placeholder(tf.int8, [None, 210, 160, 3])
 Act_R = tf.placeholder(tf.float32, [None])
