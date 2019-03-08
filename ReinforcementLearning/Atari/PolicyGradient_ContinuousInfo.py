@@ -6,7 +6,7 @@ import tensorflow as tf
 import numpy as np
 
 def conv2d(X, name, kernel_size = 3, stride_no = 1, reuse = False, trainable = True):
-    return tf.layers.conv2d(X, 128, 
+    return tf.layers.conv2d(X, 32, 
                                [kernel_size, kernel_size], 
                                [stride_no, stride_no], 
                                padding='SAME', 
@@ -29,16 +29,38 @@ def Q(S, AH, SH, Li, reuse=False, trainable = True):
     Li = tf.reshape(Li,[-1, 1])
 
     conv1 = conv2d(tf.concat([S, SH], axis=-1), stride_no=2, reuse=reuse, trainable = trainable, name='conv1') #(105, 80)
-    conv2 = conv2d(conv1, stride_no=2, reuse=reuse, trainable = trainable, name='conv2') #(53, 40)
-    conv3 = conv2d(conv2, stride_no=2, reuse=reuse, trainable = trainable, name='conv3') #(27, 20)
-    conv4 = conv2d(conv3, stride_no=2, reuse=reuse, trainable = trainable ,name='conv4') #(14, 10)
-    conv5 = conv2d(conv4, stride_no=2, reuse=reuse, trainable = trainable, name='conv5') #(7, 5)
-    conv6 = conv2d(conv5, stride_no=2, reuse=reuse, trainable = trainable, name='conv6') #(4, 3)
+    conv1a = conv2d(conv1, stride_no=1, reuse=reuse, trainable = trainable, name='conv1a') #(27, 20)
+    conv1b = conv2d(conv1a, stride_no=1, reuse=reuse, trainable = trainable, name='conv1b') #(27, 20)
+    conv1c = conv2d(conv1b, stride_no=1, reuse=reuse, trainable = trainable, name='conv1c') #(27, 20)
+    conv2 = conv2d(conv1c, stride_no=2, reuse=reuse, trainable = trainable, name='conv2') #(53, 40)
+    conv2a = conv2d(conv2, stride_no=1, reuse=reuse, trainable = trainable, name='conv2a') #(27, 20)
+    conv2b = conv2d(conv2a, stride_no=1, reuse=reuse, trainable = trainable, name='conv2b') #(27, 20)
+    conv2c = conv2d(conv2b, stride_no=1, reuse=reuse, trainable = trainable, name='conv2c') #(27, 20)
+    conv2e = conv2d(conv2c, stride_no=1, reuse=reuse, trainable = trainable, name='conv2d') #(27, 20)
+    conv2f = conv2d(conv2e, stride_no=1, reuse=reuse, trainable = trainable, name='conv2e') #(27, 20)
+    conv3 = conv2d(conv2f, stride_no=2, reuse=reuse, trainable = trainable, name='conv3') #(27, 20)
+    conv3a = conv2d(conv3, stride_no=1, reuse=reuse, trainable = trainable, name='conv3a') #(27, 20)
+    conv3b = conv2d(conv3a, stride_no=1, reuse=reuse, trainable = trainable, name='conv3b') #(27, 20)
+    conv4 = conv2d(conv3b, stride_no=2, reuse=reuse, trainable = trainable ,name='conv4') #(14, 10)
+    conv4a = conv2d(conv4, stride_no=1, reuse=reuse, trainable = trainable ,name='conv4a') #(14, 10)
+    conv4b = conv2d(conv4a, stride_no=1, reuse=reuse, trainable = trainable ,name='conv4b') #(14, 10)
+    conv5 = conv2d(conv4b, stride_no=2, reuse=reuse, trainable = trainable, name='conv5') #(7, 5)
+    conv5a = conv2d(conv5, stride_no=1, reuse=reuse, trainable = trainable, name='conv5a') #(7, 5)
+    conv5b = conv2d(conv5a, stride_no=1, reuse=reuse, trainable = trainable, name='conv5b') #(7, 5)
+    conv6 = conv2d(conv5b, stride_no=2, reuse=reuse, trainable = trainable, name='conv6') #(4, 3)
+    conv6a = conv2d(conv6, stride_no=1, reuse=reuse, trainable = trainable, name='conv6a') #(4, 3)
+    conv6b = conv2d(conv6a, stride_no=1, reuse=reuse, trainable = trainable, name='conv6b') #(4, 3)
     
-    f1 = tf.layers.flatten(conv6)
-    f2 = tf.layers.dense(tf.concat([f1, AH, Li], axis=-1), 64, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f2')
-    f3 = tf.layers.dense(f2, 32, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f3')
-    out = tf.layers.dense(f3, 6, trainable = trainable, reuse=reuse, name='out')
+    f1 = tf.layers.flatten(conv6b)
+    f2 = tf.layers.dense(f1, 512, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f2')
+    f3 = tf.layers.dense(f2, 256, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f3')
+    f4 = tf.layers.dense(f3, 128, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f4')
+    f5 = tf.layers.dense(f4, 64, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f5')
+    f6 = tf.layers.dense(f5, 32, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f6')
+    f7 = tf.layers.dense(f6, 64, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f7')
+    
+    fo = tf.layers.dense(f7, 32, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='fo')
+    out = tf.layers.dense(fo, 6, trainable = trainable, reuse=reuse, name='out')
 
     return out
 pass
@@ -49,6 +71,15 @@ def KL_div_with_normal(X):
     return np.clip(np.sum(X * (np.log(X+1E-20) - np.log(1/X.shape[0]))), 0, None)
 pass
 
+def bullet_avoidence(S):
+    # if S[-16].mean() >= 4.27:
+    #     return 1
+    # else:
+    #     return 0
+    # pass
+    return S[-16].mean() - 4.27
+pass
+
 # Enviroment settings
 STEP_LIMIT = 1000
 EPISODE = 1000
@@ -56,17 +87,19 @@ EPSILONE = 1.
 REWARD_b = .5 
 REWARD_NORMA = 50 # because the peak reward is close to 500, empiritically
 STEP_NORMA = 1
-GAMMA = .9
+GAMMA = .98
 DIE_PANELTY = REWARD_NORMA
 WARMING_EPI = 0
 UPDATE = 0
+OUTPUTFILE = 'rec.txt'
 
 env = gym.make('SpaceInvaders-v0') 
+OutFile = open(OUTPUTFILE, 'w', buffering=1)
 
 # Actor settings
-action_memo = 64
-score_delay = 1
-td_batch = 16
+action_memo = 32
+score_delay = 4
+td_batch = 32
 Act_S = tf.placeholder(tf.int8, [None, 210, 160, 3])
 Act_R = tf.placeholder(tf.float32, [None])
 Act_m = tf.placeholder(tf.float32, [None, action_memo, 6])
@@ -116,6 +149,7 @@ while(1):
     Clives = 3
     Reward_cnt = 0.
     CuReward = 0.
+    BA = 0.
     R_list, S_list = [],[]
 
     
@@ -128,7 +162,7 @@ while(1):
     while(1):
         steps += 1
         if STEP_NORMA < steps:
-            STEP_NORMA = steps
+            STEP_NORMA = (steps + STEP_NORMA)/2
         pass 
     # for step in range(STEP_LIMIT):
         # env.render() # show the windows. If you don't need to monitor the state, just comment this.
@@ -175,6 +209,7 @@ while(1):
         S, R, finish_flag, info = env.step(A)
 
         Reward_cnt += R
+        BA = bullet_avoidence(S) # bullet avoidence
         # if CuReward > REWARD_NORMA:
         #     REWARD_NORMA = CuReward
         # pass
@@ -185,7 +220,8 @@ while(1):
 
         # CuReward = CuReward * GAMMA + R
         # CuReward = CuReward * GAMMA + (R - REWARD_b) - KL_A + Reward_cnt/steps
-        CuReward = CuReward * GAMMA + (R - REWARD_b * (3 - Clives)) + Reward_cnt/steps + steps/STEP_NORMA - KL_A * .1
+        # CuReward = CuReward * GAMMA + (R + BA * 1.5 - REWARD_b * (3 - Clives)) + (steps/STEP_NORMA) * (3 - Clives) - KL_A * .5
+        CuReward = CuReward * GAMMA + (R + BA * 1.5 - REWARD_b * (3 - Clives)) - KL_A * .3
         # CuReward = CuReward * GAMMA + (R - REWARD_b)
         # CuReward = R - REWARD_b 
         
@@ -221,13 +257,34 @@ while(1):
             pass
 
             if finish_flag:
-                TD_S = [[[[0. for i in range(3)] for j in range(160)] for k in range(210)] for l in range(td_batch)]                   # Act_S: np.array(S).reshape([-1, 210, 160, 3]),
-                TD_Act_m = [[[0. for i in range(6)] for j in range(action_memo)] for l in range(td_batch)]         # Act_m: np.array(act_hp).reshape([-1, action_memo, 6]),
-                TD_S_hp = [[[[[0. for i in range(3)] for j in range(160)] for k in range(210)] for m in range(action_memo)] for l in range(td_batch)]      # Sta_m: np.array(S_hp).reshape([-1, action_memo, 210, 160, 3]),
-                TD_Clives = [3. for i in range(td_batch)]        # Act_clive: np.array([Clives]),
-                TD_Actions4Act = [0. for i in range(td_batch)]
-                TD_Reward = [0 for i in range(td_batch)]
-                td_cnt = 0
+                # clear the TD recorders
+                
+                # rebuilding the whole recs seems make program slow, so using the pushing method to instead
+                # TD_S = [[[[0. for i in range(3)] for j in range(160)] for k in range(210)] for l in range(td_batch)]                   # Act_S: np.array(S).reshape([-1, 210, 160, 3]),
+                # TD_Act_m = [[[0. for i in range(6)] for j in range(action_memo)] for l in range(td_batch)]         # Act_m: np.array(act_hp).reshape([-1, action_memo, 6]),
+                # TD_S_hp = [[[[[0. for i in range(3)] for j in range(160)] for k in range(210)] for m in range(action_memo)] for l in range(td_batch)]      # Sta_m: np.array(S_hp).reshape([-1, action_memo, 210, 160, 3]),
+                # TD_Clives = [3. for i in range(td_batch)]        # Act_clive: np.array([Clives]),
+                # TD_Actions4Act = [0. for i in range(td_batch)]
+                # TD_Reward = [0 for i in range(td_batch)]
+                # td_cnt = 0
+
+                for i in range(td_batch):
+                    TD_S.pop()
+                    TD_Reward.pop()
+                    TD_Act_m.pop()
+                    TD_S_hp.pop()
+                    TD_Clives.pop()
+                    TD_Actions4Act.pop()
+                    
+                    TD_S = [[[[0. for i in range(3)] for j in range(160)] for k in range(210)]] + TD_S
+                    TD_Reward = [0] + TD_Reward
+                    TD_Act_m = [[[0. for i in range(6)] for j in range(action_memo)]] + TD_Act_m
+                    TD_S_hp = [[[[[0. for i in range(3)] for j in range(160)] for k in range(210)] for m in range(action_memo)]] + TD_S_hp
+                    TD_Clives = [3] + TD_Clives
+                    TD_Actions4Act = [0] + TD_Actions4Act
+                pass
+
+
                 break
             else:
                 # [env.step(2) for i in range(45 + np.random.randint(10))] # adjust the initial position of the agent
@@ -249,7 +306,7 @@ while(1):
             delay_CuReward.pop() 
             delay_CuReward = [CuReward] + delay_CuReward
             if np.sum(delay_CuReward) > REWARD_NORMA:
-                REWARD_NORMA = np.sum(delay_CuReward)
+                REWARD_NORMA = (np.sum(delay_CuReward) + REWARD_NORMA)/2
             pass
 
             td_cnt += 1
@@ -296,6 +353,7 @@ while(1):
 
     pass
     print("Epi:{}  Score:{}  Loss:{} greedy:{}".format(episode,Reward_cnt,Loss,Greedy_flag))
+    OutFile.write("Epi:{}  Score:{}  Loss:{} greedy:{}\n".format(episode,Reward_cnt,Loss,Greedy_flag))
 
 
 pass
