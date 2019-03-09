@@ -76,16 +76,27 @@ def bullet_avoidence(S):
     
     # critical point
     cp = np.mean(S[-25], axis=-1).astype(np.int16).tolist() # the top position of space ship
+    cp_r1 = np.mean(S[-26], axis=-1).astype(np.int16).tolist()
+    cp_r2 = np.mean(S[-27], axis=-1).astype(np.int16).tolist()
+    cp_r3 = np.mean(S[-28], axis=-1).astype(np.int16).tolist()
     try :
         cp_ss = cp.index(77) # +3,-3 will be the whole shipe room. 
         for i in range(len(cp)) :
             # find the bullet location and see if the bullet locate in the room of the ship
             if (cp[i] == 142) and (i in [j for j in range(cp_ss-3, cp_ss+3)]): # this position is hit point
                 return -200
-            elif (cp[i] == 142) and (i in [j for j in range(cp_ss-5, cp_ss+5)]): # give a margin for ship
+            elif (cp[i] == 142) and (i in [j for j in range(cp_ss-8, cp_ss+8)]): # give a margin for ship
                 return -30
             pass 
         pass
+
+        # top critical region
+        for region in range(cp_ss-8, cp_ss+8):
+            if (cp_r1[region] == 142) or (cp_r1[region] == 142) or (cp_r1[region] == 142):
+                return -50
+            pass
+        pass
+
     except:
         pass
 
@@ -103,7 +114,7 @@ def bullet_avoidence(S):
     # pass
 
     s = np.reshape(S[-16], [-1]).tolist()
-    return s.count(142)  
+    return s.count(142) * 5 
 
     # if S[-17].mean() >= 4.27:
     #     return 1
@@ -257,7 +268,7 @@ while(1):
         # CuReward = CuReward * GAMMA + R
         # CuReward = CuReward * GAMMA + (R - REWARD_b) - KL_A + Reward_cnt/steps
         # CuReward = CuReward * GAMMA + (R + BA * 1.5 - REWARD_b * (3 - Clives)) + (steps/STEP_NORMA) * (3 - Clives) - KL_A * .5
-        CuReward = CuReward * GAMMA + (R + BA * 30 - REWARD_b * (3 - Clives)) 
+        CuReward = CuReward * GAMMA + (R + BA - REWARD_b * (3 - Clives)) 
         # CuReward = CuReward * GAMMA + (R - REWARD_b)
         # CuReward = R - REWARD_b 
         
@@ -376,7 +387,8 @@ while(1):
                 TD_Actions4Act.pop()
                 
                 TD_S = [Sp] + TD_S
-                TD_Reward = [np.clip(np.sum(delay_CuReward), -REWARD_NORMA * .1, None)] + TD_Reward
+                # TD_Reward = [np.clip(np.sum(delay_CuReward), -REWARD_NORMA * .1, None)] + TD_Reward
+                TD_Reward = [np.sum(delay_CuReward)] + TD_Reward
                 TD_Act_m = [act_hp] + TD_Act_m
                 TD_S_hp = [S_hp] + TD_S_hp
                 TD_Clives = [Clives] + TD_Clives
