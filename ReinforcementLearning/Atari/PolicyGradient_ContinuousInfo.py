@@ -72,16 +72,31 @@ def KL_div_with_normal(X):
 pass
 
 def bullet_avoidence(S):
-    s = np.reshape(S[-16], [-1]).tolist()
-    return s.count(255)  
+    s = np.mean(S[-17], axis=-1).astype(np.int8).tolist() # space room:117.33333333333333
+    # try:
+    #     sr = s.index(117) + 6.5 # space room location
+    #     reward = 0
+    #     for i in range(len(s)) :
+    #         if s[i] == 142: #bullet:[142,142,142]
+    #             reward += np.abs(i - sr)
+    #         pass 
+    #     pass
+    #     print('yes')
+    #     return reward
+    # except:
+    #     return 0
+    # pass
 
-    # if S[-16].mean() >= 4.27:
+    s = np.reshape(S[-16], [-1]).tolist()
+    return s.count(142)  
+
+    # if S[-17].mean() >= 4.27:
     #     return 1
     # else:
     #     return 0
     # pass
     
-    # return S[-16].mean() - 4.27
+    # return S[-17].mean() - 4.27
 pass
 
 # Enviroment settings
@@ -214,6 +229,8 @@ while(1):
 
         Reward_cnt += R
         BA = bullet_avoidence(S) # bullet avoidence
+        # print(BA)
+
         # if CuReward > REWARD_NORMA:
         #     REWARD_NORMA = CuReward
         # pass
