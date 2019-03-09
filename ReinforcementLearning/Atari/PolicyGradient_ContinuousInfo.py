@@ -72,16 +72,31 @@ def KL_div_with_normal(X):
 pass
 
 def bullet_avoidence(S):
-    s = np.mean(S[-17], axis=-1).astype(np.int8).tolist() # space room:117.33333333333333
+    s = np.mean(S[-17], axis=-1).astype(np.int16).tolist() # space ship:77.33333333333333
+    
+    # critical point
+    cp = np.mean(S[-25], axis=-1).astype(np.int16).tolist() # the top position of space ship
+    try :
+        cp_ss = cp.index(77) # +3,-3 will be the whole shipe room. 
+        for i in range(len(cp)) :
+            # find the bullet location and see if the bullet locate in the room of the ship
+            if (cp[i] == 142) and (i in [j for j in range(cp_ss-3, cp_ss+3)]): # this position is hit point
+                return -200
+            elif (cp[i] == 142) and (i in [j for j in range(cp_ss-5, cp_ss+5)]): # give a margin for ship
+                return -30
+            pass 
+        pass
+    except:
+        pass
+
     # try:
-    #     sr = s.index(117) + 6.5 # space room location
+    #     sr = s.index(77) + 4 # space room location
     #     reward = 0
     #     for i in range(len(s)) :
-    #         if s[i] == 142: #bullet:[142,142,142]
+    #         if s[i] == 142 : #bullet:[142,142,142]
     #             reward += np.abs(i - sr)
     #         pass 
     #     pass
-    #     print('yes')
     #     return reward
     # except:
     #     return 0
@@ -242,7 +257,7 @@ while(1):
         # CuReward = CuReward * GAMMA + R
         # CuReward = CuReward * GAMMA + (R - REWARD_b) - KL_A + Reward_cnt/steps
         # CuReward = CuReward * GAMMA + (R + BA * 1.5 - REWARD_b * (3 - Clives)) + (steps/STEP_NORMA) * (3 - Clives) - KL_A * .5
-        CuReward = CuReward * GAMMA + (R + BA * STEP_NORMA - REWARD_b * (3 - Clives)) 
+        CuReward = CuReward * GAMMA + (R + BA * 30 - REWARD_b * (3 - Clives)) 
         # CuReward = CuReward * GAMMA + (R - REWARD_b)
         # CuReward = R - REWARD_b 
         
