@@ -72,12 +72,16 @@ def KL_div_with_normal(X):
 pass
 
 def bullet_avoidence(S):
+    s = np.reshape(S[-16], [-1]).tolist()
+    return s.count(255)  
+
     # if S[-16].mean() >= 4.27:
     #     return 1
     # else:
     #     return 0
     # pass
-    return S[-16].mean() - 4.27
+    
+    # return S[-16].mean() - 4.27
 pass
 
 # Enviroment settings
@@ -99,7 +103,7 @@ OutFile = open(OUTPUTFILE, 'w', buffering=1)
 # Actor settings
 action_memo = 32
 score_delay = 4
-td_batch = 32
+td_batch = 4
 Act_S = tf.placeholder(tf.int8, [None, 210, 160, 3])
 Act_R = tf.placeholder(tf.float32, [None])
 Act_m = tf.placeholder(tf.float32, [None, action_memo, 6])
@@ -221,7 +225,7 @@ while(1):
         # CuReward = CuReward * GAMMA + R
         # CuReward = CuReward * GAMMA + (R - REWARD_b) - KL_A + Reward_cnt/steps
         # CuReward = CuReward * GAMMA + (R + BA * 1.5 - REWARD_b * (3 - Clives)) + (steps/STEP_NORMA) * (3 - Clives) - KL_A * .5
-        CuReward = CuReward * GAMMA + (R + BA * 1.5 - REWARD_b * (3 - Clives)) - KL_A * .3
+        CuReward = CuReward * GAMMA + (R + BA * STEP_NORMA - REWARD_b * (3 - Clives)) 
         # CuReward = CuReward * GAMMA + (R - REWARD_b)
         # CuReward = R - REWARD_b 
         
@@ -282,8 +286,8 @@ while(1):
                     TD_S_hp = [[[[[0. for i in range(3)] for j in range(160)] for k in range(210)] for m in range(action_memo)]] + TD_S_hp
                     TD_Clives = [3] + TD_Clives
                     TD_Actions4Act = [0] + TD_Actions4Act
+                    
                 pass
-
 
                 break
             else:
