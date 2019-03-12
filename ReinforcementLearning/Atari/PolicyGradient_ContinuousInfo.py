@@ -76,24 +76,30 @@ def bullet_avoidence(S):
     
     # critical point
     cp = np.mean(S[-25], axis=-1).astype(np.int16).tolist() # the top position of space ship
-    cp_r1 = np.mean(S[-26], axis=-1).astype(np.int16).tolist()
-    cp_r2 = np.mean(S[-27], axis=-1).astype(np.int16).tolist()
-    cp_r3 = np.mean(S[-28], axis=-1).astype(np.int16).tolist()
+    
     try :
         cp_ss = cp.index(77) # +3,-3 will be the whole shipe room. 
         for i in range(len(cp)) :
             # find the bullet location and see if the bullet locate in the room of the ship
             if (cp[i] == 142) and (i in [j for j in range(cp_ss-3, cp_ss+3)]): # this position is hit point
-                return -50
+                return -100
             elif (cp[i] == 142) and (i in [j for j in range(cp_ss-8, cp_ss+8)]): # give a margin for ship
-                return -1
+                return -20
+            elif (cp[i] == 142) and (i in [j for j in range(cp_ss-15, cp_ss+15)]):
+                return 200
             pass 
         pass
 
         # top critical region
-        for region in range(cp_ss-8, cp_ss+8):
-            if (cp_r1[region] == 142) or (cp_r2[region] == 142) or (cp_r3[region] == 142):
-                return -10
+        tcr = []
+        for i in range(-26,-50): # define the critical top region
+            tcr.append(np.mean(S[i], axis=-1).astype(np.int16).tolist())
+        pass 
+        for region in range(cp_ss-10, cp_ss+10):
+            for tcr_i in tcr:
+                if(tcr_i[region] == 142):
+                    return -50
+                pass
             pass
         pass
 
