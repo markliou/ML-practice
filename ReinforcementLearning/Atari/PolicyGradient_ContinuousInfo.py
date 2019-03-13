@@ -91,18 +91,24 @@ def bullet_avoidence(S):
             pass 
         pass
 
+        
+
         # top critical region
         tcr = []
         #for i in range(-70,-26): # define the critical top region
         for i in range(-70,-5):
             tcr.append(np.mean(S[i], axis=-1).astype(np.int16).tolist())
         pass 
-        for region in range(cp_ss-10, cp_ss+10):
-            for tcr_i in tcr:
-                if(tcr_i[region] == 142):
-                    BA_reward += -1
-                pass
-            pass
+        # for region in range(cp_ss-10, cp_ss+10):
+            # for tcr_i in tcr:
+            #     if(tcr_i[region] == 142):
+            #         BA_reward += -1
+            #     pass
+            # pass
+        # pass
+
+        for tcr_i in tcr:
+            BA_reward += tcr_i[cp_ss-10:cp_ss+10].count(142) * -1
         pass
 
     except:
