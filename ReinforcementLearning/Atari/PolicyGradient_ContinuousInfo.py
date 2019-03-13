@@ -72,6 +72,7 @@ def KL_div_with_normal(X):
 pass
 
 def bullet_avoidence(S):
+    BA_reward = 0
     s = np.mean(S[-17], axis=-1).astype(np.int16).tolist() # space ship:77.33333333333333
     
     # critical point
@@ -82,23 +83,24 @@ def bullet_avoidence(S):
         for i in range(len(cp)) :
             # find the bullet location and see if the bullet locate in the room of the ship
             if (cp[i] == 142) and (i in [j for j in range(cp_ss-3, cp_ss+3)]): # this position is hit point
-                return -100
+                BA_reward += -200
             elif (cp[i] == 142) and (i in [j for j in range(cp_ss-8, cp_ss+8)]): # give a margin for ship
-                return -20
+                BA_reward += -50
             elif (cp[i] == 142) and (i in [j for j in range(cp_ss-15, cp_ss+15)]):
-                return 200
+                BA_reward += 50
             pass 
         pass
 
         # top critical region
         tcr = []
-        for i in range(-26,-50): # define the critical top region
+        #for i in range(-70,-26): # define the critical top region
+        for i in range(-70,-5):
             tcr.append(np.mean(S[i], axis=-1).astype(np.int16).tolist())
         pass 
         for region in range(cp_ss-10, cp_ss+10):
             for tcr_i in tcr:
                 if(tcr_i[region] == 142):
-                    return -50
+                    BA_reward += -1
                 pass
             pass
         pass
@@ -120,7 +122,7 @@ def bullet_avoidence(S):
     # pass
 
     s = np.reshape(S[-17], [-1]).tolist()
-    return s.count(142) * 5 
+    BA_reward += s.count(142) * 5 
 
     # if S[-17].mean() >= 4.27:
     #     return 1
@@ -129,6 +131,8 @@ def bullet_avoidence(S):
     # pass
     
     # return S[-17].mean() - 4.27
+    
+    return BA_reward
 pass
 
 # Enviroment settings
@@ -166,6 +170,7 @@ Act_sample = tf.argmax(tf.nn.softmax(Act_A), axis=-1)[0]
 
 # PL = Act_R * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
 PL = (Act_R*2 /RewardNorma) * tf.nn.softmax_cross_entropy_with_logits_v2(labels=Actions4Act_oh, logits=Act_A)
+#PL = (Act_R) * tf.nn.softmax_cross_entropy_with_logits_v2(labels=Actions4Act_oh, logits=Act_A)
 PL = tf.reduce_mean(PL)
 Opt = tf.train.RMSPropOptimizer(learning_rate=1E-6, momentum=.8, centered=True).minimize(PL)
 # Opt = tf.contrib.opt.AdamWOptimizer(1E-4, 1E-5).minimize(PL)
@@ -274,7 +279,7 @@ while(1):
         # CuReward = CuReward * GAMMA + R
         # CuReward = CuReward * GAMMA + (R - REWARD_b) - KL_A + Reward_cnt/steps
         # CuReward = CuReward * GAMMA + (R + BA * 1.5 - REWARD_b * (3 - Clives)) + (steps/STEP_NORMA) * (3 - Clives) - KL_A * .5
-        CuReward = CuReward * GAMMA + (R + BA * Clives + Reward_cnt/steps - REWARD_b * (3 - Clives)) 
+        CuReward = CuReward * GAMMA + ((R + BA * Clives + Reward_cnt/steps - REWARD_b * (3 - Clives)))/(.1 * KL_A + 1E-9) 
         # CuReward = CuReward * GAMMA + (R - REWARD_b)
         # CuReward = R - REWARD_b 
         
@@ -412,3 +417,6 @@ while(1):
 
 
 pass
+
+
+
