@@ -20,7 +20,7 @@ def Attention(Q, K, name='att'):
     return tf.reshape(attention, tf.shape(Q)) * tf.nn.sigmoid(gamma) + Q * tf.nn.sigmoid(1 - gamma) # V
 pass 
 
-def Spatial_attention(Q, K, compression_channel_no = 16, name = 'satt'):
+def Guide_Spatial_attention(Q, K, compression_channel_no = 16, name = 'satt'):
     '''
     Use simple dot product to get the attention. The variable names and 
     concepts are still deviative from "Attention is all you need".

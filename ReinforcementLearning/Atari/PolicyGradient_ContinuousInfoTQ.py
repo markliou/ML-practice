@@ -5,8 +5,8 @@ import gym
 import tensorflow as tf
 import numpy as np
 
-def conv2d(X, name, kernel_size = 3, stride_no = 1, reuse = False, trainable = True):
-    return tf.layers.conv2d(X, 32, 
+def conv2d(X, name, kernel_size = 5, stride_no = 1, reuse = False, trainable = True):
+    return tf.layers.conv2d(X, 128, 
                                [kernel_size, kernel_size], 
                                [stride_no, stride_no], 
                                padding='SAME', 
@@ -23,6 +23,7 @@ def Q(S, AH, SH, Li, reuse=False, trainable = True):
         S = (tf.cast(S,tf.float32)-128)/128.  #(210, 160, 3)
         SH = tf.unstack(tf.map_fn(lambda x: tf.stack([tf.concat(tf.unstack(x, axis=0), axis=-1)], axis=0), SH), axis=1)[0]
         SH = (tf.cast(SH,tf.float32)-128)/128.
+        SH = tf.layers.conv2d(SH, 1, [7,7], [1,1], padding="SAME", reuse=reuse, trainable = trainable, name='his_comp')
         AH = tf.reshape(AH, [-1, AH.shape[1] * AH.shape[2]]) #[None, 32, 6]
         AH = AH * 2 - 1
         Li -= 2
@@ -52,14 +53,14 @@ def Q(S, AH, SH, Li, reuse=False, trainable = True):
         conv6b = conv2d(conv6a, stride_no=1, reuse=reuse, trainable = trainable, name='conv6b') #(4, 3)
         
         f1 = tf.layers.flatten(conv6b)
-        f2 = tf.layers.dense(f1, 512, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f2')
-        f3 = tf.layers.dense(f2, 256, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f3')
+        f2 = tf.layers.dense(f1, 1024, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f2')
+        f3 = tf.layers.dense(f2, 512, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f3')
         f4 = tf.layers.dense(f3, 128, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f4')
         f5 = tf.layers.dense(f4, 64, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f5')
         f6 = tf.layers.dense(f5, 32, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f6')
         f7 = tf.layers.dense(f6, 64, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='f7')
         
-        fo = tf.layers.dense(f7, 32, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='fo')
+        fo = tf.layers.dense(f7, 1024, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='fo')
         out = tf.layers.dense(fo, 6, trainable = trainable, reuse=reuse, name='out')
 
     return out
@@ -70,6 +71,7 @@ def sQ(S, AH, SH, Li, reuse=False, trainable = True):
         S = (tf.cast(S,tf.float32)-128)/128.  #(210, 160, 3)
         SH = tf.unstack(tf.map_fn(lambda x: tf.stack([tf.concat(tf.unstack(x, axis=0), axis=-1)], axis=0), SH), axis=1)[0]
         SH = (tf.cast(SH,tf.float32)-128)/128.
+        SH = tf.layers.conv2d(SH, 1, [7,7], [1,1], padding="SAME", reuse=reuse, trainable = trainable, name='shis_comp')
         AH = tf.reshape(AH, [-1, AH.shape[1] * AH.shape[2]]) #[None, 32, 6]
         AH = AH * 2 - 1
         Li -= 2
@@ -99,15 +101,16 @@ def sQ(S, AH, SH, Li, reuse=False, trainable = True):
         conv6b = conv2d(conv6a, stride_no=1, reuse=reuse, trainable = trainable, name='sconv6b') #(4, 3)
         
         f1 = tf.layers.flatten(conv6b)
-        f2 = tf.layers.dense(f1, 512, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='sf2')
-        f3 = tf.layers.dense(f2, 256, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='sf3')
+        f2 = tf.layers.dense(f1, 1024, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='sf2')
+        f3 = tf.layers.dense(f2, 512, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='sf3')
         f4 = tf.layers.dense(f3, 128, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='sf4')
         f5 = tf.layers.dense(f4, 64, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='sf5')
         f6 = tf.layers.dense(f5, 32, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='sf6')
         f7 = tf.layers.dense(f6, 64, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='sf7')
         
-        fo = tf.layers.dense(f7, 32, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='sfo')
+        fo = tf.layers.dense(f7, 1024, activation=tf.nn.elu, trainable = trainable, reuse=reuse, name='sfo')
         out = tf.layers.dense(fo, 6, trainable = trainable, reuse=reuse, name='sout')
+
 
     return out
 pass
@@ -119,49 +122,62 @@ def KL_div_with_normal(X):
 pass
 
 def bullet_avoidence(S):
+    BA_reward = 0
+    Hit_flag = False
     s = np.mean(S[-17], axis=-1).astype(np.int16).tolist() # space ship:77.33333333333333
     
     # critical point
     cp = np.mean(S[-25], axis=-1).astype(np.int16).tolist() # the top position of space ship
-    cp_r1 = np.mean(S[-26], axis=-1).astype(np.int16).tolist()
-    cp_r2 = np.mean(S[-27], axis=-1).astype(np.int16).tolist()
-    cp_r3 = np.mean(S[-28], axis=-1).astype(np.int16).tolist()
+    
     try :
         cp_ss = cp.index(77) # +3,-3 will be the whole shipe room. 
         for i in range(len(cp)) :
             # find the bullet location and see if the bullet locate in the room of the ship
             if (cp[i] == 142) and (i in [j for j in range(cp_ss-3, cp_ss+3)]): # this position is hit point
-                return -50
+                BA_reward += -100
+                Hit_flag = True
             elif (cp[i] == 142) and (i in [j for j in range(cp_ss-8, cp_ss+8)]): # give a margin for ship
-                return -1
+                BA_reward += -10
+            elif (cp[i] == 142) and (i in [j for j in range(cp_ss-15, cp_ss+15)]):
+                BA_reward += -5
             pass 
         pass
 
         # top critical region
-        for region in range(cp_ss-8, cp_ss+8):
-            if (cp_r1[region] == 142) or (cp_r2[region] == 142) or (cp_r3[region] == 142):
-                return -10
-            pass
+        tcr = []
+        #for i in range(-70,-26): # define the critical top region
+        for i in range(-70,-17):
+            tcr.append(np.mean(S[i], axis=-1).astype(np.int16).tolist())
+        pass 
+        #for region in range(cp_ss-10, cp_ss+10):
+        #    for tcr_i in tcr:
+        #        if(tcr_i[region] == 142):
+        #            BA_reward += -1
+        #        pass
+        #    pass
+        #pass
+        for tcr_i in tcr:
+            BA_reward += tcr_i[cp_ss-10:cp_ss+10].count(142) * -1
         pass
 
     except:
         pass
 
-    # try:
-    #     sr = s.index(77) + 4 # space room location
-    #     reward = 0
-    #     for i in range(len(s)) :
-    #         if s[i] == 142 : #bullet:[142,142,142]
-    #             reward += np.abs(i - sr)
-    #         pass 
-    #     pass
-    #     return reward
-    # except:
-    #     return 0
-    # pass
+    try:
+        sr = s.index(77) + 4 # space room location
+        reward = 0
+        for i in range(len(s)) :
+            if s[i] == 142 : #bullet:[142,142,142]
+                reward += np.abs(i - sr)
+            pass 
+        pass
+        BA_reward += reward
+    except:
+        pass
+    
 
-    s = np.reshape(S[-17], [-1]).tolist()
-    return s.count(142) * 5 
+    # s = np.reshape(S[-17], [-1]).tolist()
+    # BA_reward += s.count(142) * 5 
 
     # if S[-17].mean() >= 4.27:
     #     return 1
@@ -170,6 +186,8 @@ def bullet_avoidence(S):
     # pass
     
     # return S[-17].mean() - 4.27
+    
+    return BA_reward, Hit_flag
 pass
 
 # Enviroment settings
@@ -189,9 +207,9 @@ env = gym.make('SpaceInvaders-v0')
 OutFile = open(OUTPUTFILE, 'w', buffering=1)
 
 # Actor settings
-action_memo = 64
+action_memo = 32
 score_delay = 1
-td_batch = 4
+td_batch = 32
 Act_S = tf.placeholder(tf.int8, [None, 210, 160, 3])
 Act_R = tf.placeholder(tf.float32, [None])
 Act_m = tf.placeholder(tf.float32, [None, action_memo, 6])
@@ -215,7 +233,7 @@ update_Q = [tf.assign(sq, q) for q,sq in zip(Q_weights,sQ_weights)]
 # PL = Act_R * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
 PL = (Act_R*2 /RewardNorma) * tf.nn.softmax_cross_entropy_with_logits_v2(labels=Actions4Act_oh, logits=Act_A)
 PL = tf.reduce_mean(PL)
-Opt = tf.train.RMSPropOptimizer(learning_rate=1E-6, momentum=.8, centered=True).minimize(PL)
+Opt = tf.train.RMSPropOptimizer(learning_rate=1E-6, momentum=.8, centered=False).minimize(PL, var_list=Q_weights)
 # Opt = tf.contrib.opt.AdamWOptimizer(1E-4, 1E-5).minimize(PL)
 # Opt = tf.train.MomentumOptimizer(learning_rate=1E-4, momentum=.8).minimize(PL)
 
@@ -243,7 +261,9 @@ while(1):
     delay_CuReward = [0. for i in range(score_delay)].copy()
 
     # sync Q and sQ
-    sess.run(update_Q)
+    if episode % 3 == 0:
+        sess.run(update_Q)
+    pass
 
     S = env.reset() #(210, 160, 3)
     # [env.step(2) for i in range(75 + np.random.randint(10))] # adjust the initial position of the agent
@@ -252,6 +272,7 @@ while(1):
     Reward_cnt = 0.
     CuReward = 0.
     BA = 0.
+    Hit_flag = False
     R_list, S_list = [],[]
 
     
@@ -311,7 +332,7 @@ while(1):
         S, R, finish_flag, info = env.step(A)
 
         Reward_cnt += R
-        BA = bullet_avoidence(S) # bullet avoidence
+        BA, Hit_flag = bullet_avoidence(S) # bullet avoidence
         # print(BA)
 
         # if CuReward > REWARD_NORMA:
@@ -325,7 +346,8 @@ while(1):
         # CuReward = CuReward * GAMMA + R
         # CuReward = CuReward * GAMMA + (R - REWARD_b) - KL_A + Reward_cnt/steps
         # CuReward = CuReward * GAMMA + (R + BA * 1.5 - REWARD_b * (3 - Clives)) + (steps/STEP_NORMA) * (3 - Clives) - KL_A * .5
-        CuReward = CuReward * GAMMA + (R + BA * Clives + Reward_cnt/steps - REWARD_b * (3 - Clives)) 
+        # CuReward = CuReward * GAMMA + (R + BA * Clives + Reward_cnt/steps - REWARD_b * (3 - Clives)) 
+        CuReward = CuReward * GAMMA + ((R + BA * Clives + Reward_cnt/steps - REWARD_b * (3 - Clives))) 
         # CuReward = CuReward * GAMMA + (R - REWARD_b)
         # CuReward = R - REWARD_b 
         
@@ -455,6 +477,10 @@ while(1):
             pass
             print('Action:{}  Loss:{} Epsilon:{} greedy:{} Score:{} Update:{}'.format(A, Loss, EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None), Greedy_flag, Reward_cnt, UPDATE))
             
+            if Hit_flag:
+                [env.step(0) for i in range(40)]
+            pass
+
         pass
 
     pass
