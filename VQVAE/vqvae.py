@@ -25,7 +25,7 @@ def main():
     X_ = AE(X)
     loss = tf.reduce_mean(tf.pow(X - X_, 2))
     
-    opt = tf.train.RMSPropOptimizer(learning_rate=learning_rate, centered=True, momentum=.9).minimize(loss)
+    opt = tf.train.RMSPropOptimizer(learning_rate=learning_rate).minimize(loss)
 
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
@@ -40,7 +40,7 @@ def main():
     for i in range(iteration):
         batch_x, _ = mnist.train.next_batch(batch_size)
         _, c_loss = sess.run([opt, loss],feed_dict={X:np.reshape(batch_x, [-1, 28, 28, 1])})
-        
+    
         if i % 1000 == 0 or i == 1:
             print('Step {}, Loss: {}'.format(i, c_loss))
         pass
@@ -50,17 +50,13 @@ def main():
     # Generate images via autoencoder
     f, a = plt.subplots(4, 10, figsize=(10, 4))
     for i in range(10):
-        batch_x, _ = mnist.test.next_batch(2)
-        batch_x = np.reshape(batch_x, [-1, 28, 28, 1])
-        g = sess.run(X_, feed_dict={X:batch_x})
-        for j in range(2):
+        batch_x, _ = mnist.test.next_batch(4)
+        g = sess.run(X_, feed_dict={X:np.reshape(batch_x, [-1, 28, 28, 1])})
+        for j in range(4):
             # Generate image from noise. Extend to 3 channels for matplot figure.
             img = np.reshape(np.repeat(g[j][:, :, np.newaxis], 3, axis=2),
                                 newshape=(28, 28, 3))
-            a[j * 2][i].imshow(img)
-            img = np.reshape(np.repeat(batch_x[j][:, :, np.newaxis], 3, axis=2),
-                                newshape=(28, 28, 3))
-            a[j * 2 + 1][i].imshow(img)
+            a[j][i].imshow(img)
 
     f.show()
     plt.draw()
