@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 learning_rate = 1E-4
 batch_size = 32
-iteration = 5000
+iteration = 50000
 
 def AE(X, act=tf.nn.relu):
     conv1e = tf.keras.layers.Conv2D(32, [3, 3], strides=2, padding='SAME', activation=act)(X)
@@ -25,7 +25,7 @@ def main():
     X_ = AE(X)
     loss = tf.reduce_mean(tf.pow(X - X_, 2))
     
-    opt = tf.train.RMSPropOptimizer(learning_rate=learning_rate).minimize(loss)
+    opt = tf.train.RMSPropOptimizer(learning_rate=learning_rate, centered=True, momentum=.9).minimize(loss)
 
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
