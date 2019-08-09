@@ -2,9 +2,10 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt 
 
-learning_rate = 1E-4
+learning_rate = 1E-5
 batch_size = 32
-iteration = 50000
+iteration = 10000
+beta = .25
 
 def VQVAE(X, act=tf.nn.relu, dic_size=128):
     with tf.variable_scope('vqvae_e'):
@@ -41,7 +42,7 @@ def main():
     # losses
     dec_loss = tf.reduce_mean(tf.pow(X - X_, 2)) #zq => X_
     vq_loss  = tf.reduce_mean(tf.pow((tf.stop_gradient(VQVAE_ze) - VQVAE_zq), 2))   #ze => zq
-    enc_loss = tf.reduce_mean(tf.pow((VQVAE_ze - tf.stop_gradient(VQVAE_zq)), 2))   #X => zq
+    enc_loss = tf.reduce_mean(tf.pow((VQVAE_ze - tf.stop_gradient(VQVAE_zq)), 2)) * beta  #X => zq
     
     # gradients for applying
     optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, centered=True, momentum=.9)
