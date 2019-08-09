@@ -4,28 +4,65 @@ import matplotlib.pyplot as plt
 
 learning_rate = 1E-4
 batch_size = 32
-iteration = 5000
+iteration = 500
 
-def AE(X, act=tf.nn.relu):
-    conv1e = tf.keras.layers.Conv2D(32, [3, 3], strides=2, padding='SAME', activation=act)(X)
-    conv2e = tf.keras.layers.Conv2D(32, [3, 3], strides=2, padding='VALID', activation=act)(conv1e)
-    conv3e = tf.keras.layers.Conv2D(32, [3, 3], strides=2, padding='SAME', activation=act)(conv2e)
-    conv1d = tf.keras.layers.Conv2DTranspose(32, [3, 3], strides=2, padding='VALID', activation=act)(conv3e)
-    conv2d = tf.keras.layers.Conv2DTranspose(32, [3, 3], strides=2, padding='SAME', activation=act)(conv1d)
-    conv3d = tf.keras.layers.Conv2DTranspose(32, [3, 3], strides=2, padding='SAME', activation=act)(conv2d)
+def VQVAE(X, act=tf.nn.relu, dic_size=128):
+    with tf.variable_scope('vqvae_e'):
+        conv1e = tf.keras.layers.Conv2D(32, [3, 3], strides=2, padding='SAME', activation=act)(X)
+        conv2e = tf.keras.layers.Conv2D(32, [3, 3], strides=2, padding='VALID', activation=act)(conv1e)
+        conv3e = tf.keras.layers.Conv2D(32, [3, 3], strides=2, padding='SAME', activation=act)(conv2e)
+        ze = tf.reshape(conv3e, [-1, conv3e.shape[1] * conv3e.shape[2], conv3e.shape[3]])
+    
+    with tf.variable_scope('vqvae_vq'):
+        #crate the quantized vector dictionary 
+        vq_dictionary = tf.Variable(tf.random.uniform([dic_size, conv3e.shape[1].value * conv3e.shape[2].value]), trainable=True, dtype=tf.float32, name='vq_dictionary')
+        zq = tf.stack([
+                      tf.stack([ 
+                                vq_dictionary[tf.argmin(tf.reduce_mean(tf.pow(j-vq_dictionary, 2), axis=-1))] for j in tf.unstack(i, axis=-1) 
+                               ], axis=-1) for i in tf.unstack(ze, axis=0)
+                     ], axis=0)
+    
+    zq = tf.reshape(zq, conv3e.shape)
+    with tf.variable_scope('vqvae_d'):
+        conv1d = tf.keras.layers.Conv2DTranspose(32, [3, 3], strides=2, padding='VALID', activation=act)(zq)
+        conv2d = tf.keras.layers.Conv2DTranspose(32, [3, 3], strides=2, padding='SAME', activation=act)(conv1d)
+        conv3d = tf.keras.layers.Conv2DTranspose(32, [3, 3], strides=2, padding='SAME', activation=act)(conv2d)
     
     out = tf.keras.layers.Conv2D(1, [3, 3], strides=1, padding='SAME', activation=None)(conv3d)
 
-    return out
+    return [out, tf.reshape(ze, conv3e.shape), zq]
 pass
 
 
 def main():
-    X = tf.placeholder(dtype=tf.float32, shape=[None, 28, 28, 1])
-    X_ = AE(X)
-    loss = tf.reduce_mean(tf.pow(X - X_, 2))
+    X = tf.placeholder(dtype=tf.float32, shape=[batch_size, 28, 28, 1])
+    X_, VQVAE_ze, VQVAE_zq = VQVAE(X)
+
+    # losses
+    dec_loss = tf.reduce_mean(tf.pow(X - X_, 2)) #zq => X_
+    vq_loss  = tf.reduce_mean(tf.pow((tf.stop_gradient(VQVAE_ze) - VQVAE_zq), 2))   #ze => zq
+    enc_loss = tf.reduce_mean(tf.pow((VQVAE_ze - tf.stop_gradient(VQVAE_zq)), 2))   #X => zq
     
-    opt = tf.train.RMSPropOptimizer(learning_rate=learning_rate).minimize(loss)
+    # gradients for applying
+    optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, centered=True, momentum=.9)
+    ## decoder
+    dec_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "vqvae_d")
+    dec_gras = tf.gradients(dec_loss, dec_vars)
+    dec_gras_var = list(zip(dec_gras, dec_vars))
+    ## VQ dictionary
+    vqd_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "vqvae_vq")
+    vqd_gras = tf.gradients(dec_loss + vq_loss, vqd_vars)
+    vqd_gras_var = list(zip(vqd_gras, vqd_vars))
+    ## encoder
+    enc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "vqvae_e")
+    transp_grads = tf.gradients(dec_loss, VQVAE_zq)
+    enc_gras = [tf.gradients(VQVAE_ze, var, transp_grads)[0] + tf.gradients(enc_loss, var)[0] for var in enc_vars]
+    enc_gras_var = list(zip(enc_gras, enc_vars))
+
+    grads_vars = dec_gras_var + vqd_gras_var + enc_gras_var
+
+    with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
+        opt = optimizer.apply_gradients(grads_vars)
 
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
@@ -39,9 +76,9 @@ def main():
 
     for i in range(iteration):
         batch_x, _ = mnist.train.next_batch(batch_size)
-        _, c_loss = sess.run([opt, loss],feed_dict={X:np.reshape(batch_x, [-1, 28, 28, 1])})
-    
-        if i % 1000 == 0 or i == 1:
+        _, c_loss = sess.run([opt, dec_loss],feed_dict={X:np.reshape(batch_x, [-1, 28, 28, 1])})
+        
+        if i % 10 == 0 or i == 1:
             print('Step {}, Loss: {}'.format(i, c_loss))
         pass
     pass
@@ -50,13 +87,17 @@ def main():
     # Generate images via autoencoder
     f, a = plt.subplots(4, 10, figsize=(10, 4))
     for i in range(10):
-        batch_x, _ = mnist.test.next_batch(4)
-        g = sess.run(X_, feed_dict={X:np.reshape(batch_x, [-1, 28, 28, 1])})
-        for j in range(4):
+        batch_x, _ = mnist.test.next_batch(2)
+        batch_x = np.reshape(batch_x, [-1, 28, 28, 1])
+        g = sess.run(X_, feed_dict={X:batch_x})
+        for j in range(2):
             # Generate image from noise. Extend to 3 channels for matplot figure.
             img = np.reshape(np.repeat(g[j][:, :, np.newaxis], 3, axis=2),
                                 newshape=(28, 28, 3))
-            a[j][i].imshow(img)
+            a[j * 2][i].imshow(img)
+            img = np.reshape(np.repeat(batch_x[j][:, :, np.newaxis], 3, axis=2),
+                                newshape=(28, 28, 3))
+            a[j * 2 + 1][i].imshow(img)
 
     f.show()
     plt.draw()
@@ -66,6 +107,7 @@ pass
 
 
 if __name__=="__main__":
+    # ref: https://github.com/Kyubyong/vq-vae/blob/master/train.py
     main()
 pass
 
