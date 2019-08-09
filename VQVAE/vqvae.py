@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 learning_rate = 1E-4
 batch_size = 32
-iteration = 500
+iteration = 50000
 
 def VQVAE(X, act=tf.nn.relu, dic_size=128):
     with tf.variable_scope('vqvae_e'):
@@ -16,13 +16,13 @@ def VQVAE(X, act=tf.nn.relu, dic_size=128):
     with tf.variable_scope('vqvae_vq'):
         #crate the quantized vector dictionary 
         vq_dictionary = tf.Variable(tf.random.uniform([dic_size, conv3e.shape[1].value * conv3e.shape[2].value]), trainable=True, dtype=tf.float32, name='vq_dictionary')
-        zq = tf.stack([
+        zq = tf.map_fn(lambda i:
                       tf.stack([ 
                                 vq_dictionary[tf.argmin(tf.reduce_mean(tf.pow(j-vq_dictionary, 2), axis=-1))] for j in tf.unstack(i, axis=-1) 
-                               ], axis=-1) for i in tf.unstack(ze, axis=0)
-                     ], axis=0)
+                               ], axis=-1)
+                      , ze, parallel_iterations=32)
     
-    zq = tf.reshape(zq, conv3e.shape)
+    zq = tf.reshape(zq, [-1, conv3e.shape[1].value, conv3e.shape[2].value, conv3e.shape[3].value])
     with tf.variable_scope('vqvae_d'):
         conv1d = tf.keras.layers.Conv2DTranspose(32, [3, 3], strides=2, padding='VALID', activation=act)(zq)
         conv2d = tf.keras.layers.Conv2DTranspose(32, [3, 3], strides=2, padding='SAME', activation=act)(conv1d)
@@ -30,12 +30,12 @@ def VQVAE(X, act=tf.nn.relu, dic_size=128):
     
     out = tf.keras.layers.Conv2D(1, [3, 3], strides=1, padding='SAME', activation=None)(conv3d)
 
-    return [out, tf.reshape(ze, conv3e.shape), zq]
+    return [out, tf.reshape(ze, [-1, conv3e.shape[1].value, conv3e.shape[2].value, conv3e.shape[3].value]), zq]
 pass
 
 
 def main():
-    X = tf.placeholder(dtype=tf.float32, shape=[batch_size, 28, 28, 1])
+    X = tf.placeholder(dtype=tf.float32, shape=[None, 28, 28, 1])
     X_, VQVAE_ze, VQVAE_zq = VQVAE(X)
 
     # losses
