@@ -90,7 +90,6 @@ pass
 
 
 if __name__=="__main__":
-    # ref: https://github.com/Kyubyong/vq-vae/blob/master/train.py
     main()
 pass
 
