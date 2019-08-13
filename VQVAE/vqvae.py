@@ -16,11 +16,11 @@ def VQVAE(X, act=tf.nn.relu, dic_size=128):
     
     with tf.variable_scope('vqvae_vq'):
         #crate the quantized vector dictionary 
-        vq_dictionary = tf.Variable(tf.random.uniform([dic_size, conv3e.shape[1].value * conv3e.shape[2].value]), trainable=True, dtype=tf.float32, name='vq_dictionary')
+        vq_dictionary = tf.Variable(tf.random.uniform([dic_size, conv3e.shape[3].value]), trainable=True, dtype=tf.float32, name='vq_dictionary')
         zq = tf.map_fn(lambda i:
                       tf.stack([ 
-                                vq_dictionary[tf.argmin(tf.reduce_mean(tf.pow(j-vq_dictionary, 2), axis=-1))] for j in tf.unstack(i, axis=-1) 
-                               ], axis=-1)
+                                vq_dictionary[tf.argmin(tf.reduce_mean(tf.pow(j-vq_dictionary, 2), axis=-1))] for j in tf.unstack(i, axis=0) 
+                               ], axis=0)
                       , ze, parallel_iterations=32)
     zq = ze + tf.stop_gradient(zq - ze)
     zq = tf.reshape(zq, [-1, conv3e.shape[1].value, conv3e.shape[2].value, conv3e.shape[3].value])

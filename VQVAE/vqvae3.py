@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 learning_rate = 1E-5
 batch_size = 32
-iteration = 5000
+iteration = 10000
 beta = .25
 
 def VQVAE(X, act=tf.nn.relu, dic_size=128):
@@ -22,7 +22,7 @@ def VQVAE(X, act=tf.nn.relu, dic_size=128):
                                 vq_dictionary[tf.argmin(tf.reduce_mean(tf.pow(j-vq_dictionary, 2), axis=-1))] for j in tf.unstack(i, axis=-1) 
                                ], axis=-1)
                       , ze, parallel_iterations=32)
-    zq = ze + tf.stop_gradient(zq - ze)
+    
     zq = tf.reshape(zq, [-1, conv3e.shape[1].value, conv3e.shape[2].value, conv3e.shape[3].value])
     with tf.variable_scope('vqvae_d'):
         conv1d = tf.keras.layers.Conv2DTranspose(32, [3, 3], strides=2, padding='VALID', activation=act)(zq)
@@ -42,11 +42,29 @@ def main():
     # losses
     dec_loss = tf.reduce_mean(tf.pow(X - X_, 2)) #zq => X_
     vq_loss  = tf.reduce_mean(tf.pow((tf.stop_gradient(VQVAE_ze) - VQVAE_zq), 2)) * beta  #ze => zq
-    enc_loss = tf.reduce_mean(tf.pow((VQVAE_ze - tf.stop_gradient(VQVAE_zq)), 2))   #X => zq
+    enc_loss = tf.reduce_mean(tf.pow((VQVAE_ze - tf.stop_gradient(VQVAE_zq)), 2)) #X => zq
     
     # gradients for applying
-    opt = tf.train.RMSPropOptimizer(learning_rate=learning_rate, centered=True, momentum=.9).minimize(dec_loss + vq_loss + enc_loss)
-    
+    optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, centered=True, momentum=.9)
+    ## decoder
+    dec_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "vqvae_d")
+    dec_gras = tf.gradients(dec_loss, dec_vars)
+    dec_gras_var = list(zip(dec_gras, dec_vars))
+    ## VQ dictionary
+    vqd_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "vqvae_vq")
+    vqd_gras = tf.gradients(dec_loss + vq_loss, vqd_vars)
+    vqd_gras_var = list(zip(vqd_gras, vqd_vars))
+    ## encoder
+    enc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, "vqvae_e")
+    transp_grads = tf.gradients(dec_loss, VQVAE_zq)
+    enc_gras = [tf.gradients(VQVAE_ze, var, transp_grads)[0] + tf.gradients(enc_loss, var)[0] for var in enc_vars]
+    enc_gras_var = list(zip(enc_gras, enc_vars))
+
+    grads_vars = dec_gras_var + vqd_gras_var + enc_gras_var
+
+    with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
+        opt = optimizer.apply_gradients(grads_vars)
+
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)
@@ -90,6 +108,7 @@ pass
 
 
 if __name__=="__main__":
+    # ref: https://github.com/Kyubyong/vq-vae/blob/master/train.py
     main()
 pass
 
