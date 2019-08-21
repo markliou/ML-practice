@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 learning_rate = 1E-5
 batch_size = 32
 iteration = 50000
+
+# beta should not be updated to fast, because too fast updating would lead the codebook
+# out of the normal distribution
 beta = .25
 
 def VQVAE(X, act=tf.nn.elu, dic_size=128):
