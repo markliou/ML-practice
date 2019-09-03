@@ -8,13 +8,13 @@ import matplotlib.pyplot as plt
 
 learning_rate = 1E-5
 batch_size = 32
-iteration = 50000
+iteration = 5000
 # NOTE:
 # 一開始code book 的更新很小是擔心更新太快會讓原本呈現常態分佈的code book太快偏離
 # 原本的常態分佈。因此如果encoder已經強烈鎖定在用常態分布，那code book最終應該也會
 # 偏向使用常態分佈。因此這邊把beta可以稍微調整大一點。
-beta = .9
-gamma = .25
+beta = .5
+gamma = .9
 
 def VQVAE(X, act=tf.nn.elu, dic_size=128):
     with tf.variable_scope('vqvae_e'):
@@ -55,6 +55,7 @@ pass
 
 def main():
     X = tf.placeholder(dtype=tf.float32, shape=[None, 28, 28, 1])
+    LR = tf.placeholder(dtype=tf.float32, shape=None)
     X_, VQVAE_ze, VQVAE_zq, vae_loss = VQVAE(X)
 
     # losses
@@ -63,7 +64,7 @@ def main():
     enc_loss = tf.reduce_mean(tf.pow((VQVAE_ze - tf.stop_gradient(VQVAE_zq)), 2))   #X => zq
     
     # gradients for applying
-    opt = tf.train.RMSPropOptimizer(learning_rate=learning_rate, centered=True, momentum=.9).minimize(dec_loss + vq_loss + enc_loss + vae_loss * gamma)
+    opt = tf.train.RMSPropOptimizer(learning_rate=LR, centered=True, momentum=.9).minimize(dec_loss + vq_loss + enc_loss + vae_loss * gamma)
     
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
@@ -75,9 +76,17 @@ def main():
     from tensorflow.examples.tutorials.mnist import input_data
     mnist = input_data.read_data_sets("/tmp/data/", one_hot=True)
 
+    # warm up
+    print("warming up...", end='')
+    for i in range(500):
+        print('.', end='')
+        batch_x, _ = mnist.train.next_batch(batch_size)
+        _, c_loss = sess.run([opt, dec_loss],feed_dict={X:np.reshape(batch_x, [-1, 28, 28, 1]), LR:0})
+    print("warming up complete...")
+
     for i in range(iteration):
         batch_x, _ = mnist.train.next_batch(batch_size)
-        _, c_loss = sess.run([opt, dec_loss],feed_dict={X:np.reshape(batch_x, [-1, 28, 28, 1])})
+        _, c_loss = sess.run([opt, dec_loss],feed_dict={X:np.reshape(batch_x, [-1, 28, 28, 1]), LR:learning_rate})
         
         if i % 10 == 0 or i == 1:
             print('Step {}, Loss: {}'.format(i, c_loss))
