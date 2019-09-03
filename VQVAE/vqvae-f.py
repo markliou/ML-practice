@@ -6,17 +6,17 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt 
 
-learning_rate = 1E-5
+learning_rate = 1E-4
 batch_size = 32
-iteration = 5000
+iteration = 10000
 # NOTE:
 # 一開始code book 的更新很小是擔心更新太快會讓原本呈現常態分佈的code book太快偏離
 # 原本的常態分佈。因此如果encoder已經強烈鎖定在用常態分布，那code book最終應該也會
 # 偏向使用常態分佈。因此這邊把beta可以稍微調整大一點。
-beta = .9
-gamma = .9
+beta = .5
+gamma = 1.
 
-def VQVAE(X, act=tf.nn.elu, dic_size=128):
+def VQVAE(X, act=tf.nn.elu, dic_size=512):
     with tf.variable_scope('vqvae_e'):
         conv1e = tf.keras.layers.Conv2D(32, [3, 3], strides=2, padding='SAME', activation=act)(X)
         conv2e = tf.keras.layers.Conv2D(32, [3, 3], strides=2, padding='VALID', activation=act)(conv1e)
@@ -39,7 +39,7 @@ def VQVAE(X, act=tf.nn.elu, dic_size=128):
                       tf.stack([ 
                                 vq_dictionary[tf.argmin(tf.reduce_mean(tf.pow(j-vq_dictionary, 2), axis=-1))] for j in tf.unstack(i, axis=0) 
                                ], axis=0)
-                      , ze, parallel_iterations=32)
+                      , ze, parallel_iterations=64)
     zq = ze + tf.stop_gradient(zq - ze)
     zq = tf.reshape(zq, [-1, conv3e.shape[1].value, conv3e.shape[2].value, conv3e.shape[3].value])
     with tf.variable_scope('vqvae_d'):
