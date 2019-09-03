@@ -9,14 +9,11 @@ import matplotlib.pyplot as plt
 learning_rate = 1E-4
 batch_size = 32
 iteration = 10000
-# NOTE:
-# 一開始code book 的更新很小是擔心更新太快會讓原本呈現常態分佈的code book太快偏離
-# 原本的常態分佈。因此如果encoder已經強烈鎖定在用常態分布，那code book最終應該也會
-# 偏向使用常態分佈。因此這邊把beta可以稍微調整大一點。
-beta = .5
-gamma = 1.
 
-def VQVAE(X, act=tf.nn.elu, dic_size=512):
+beta = .25
+gamma = .9
+
+def VQVAE(X, act=tf.nn.tanh, dic_size=512):
     with tf.variable_scope('vqvae_e'):
         conv1e = tf.keras.layers.Conv2D(32, [3, 3], strides=2, padding='SAME', activation=act)(X)
         conv2e = tf.keras.layers.Conv2D(32, [3, 3], strides=2, padding='VALID', activation=act)(conv1e)
@@ -31,15 +28,20 @@ def VQVAE(X, act=tf.nn.elu, dic_size=512):
         kl_div_loss = 1 + z_std - tf.square(z_mu) - tf.exp(z_std)
         kl_div_loss = -0.5 * tf.reduce_mean(kl_div_loss, 1)
         ze = tf.reshape(z, [-1, conv3e.shape[1] * conv3e.shape[2], conv3e.shape[3]])
-
+    
     with tf.variable_scope('vqvae_vq'):
-        #crate the quantized vector dictionary 
-        vq_dictionary = tf.Variable(tf.random.uniform([dic_size, conv3e.shape[3].value]), trainable=True, dtype=tf.float32, name='vq_dictionary')
-        zq = tf.map_fn(lambda i:
-                      tf.stack([ 
-                                vq_dictionary[tf.argmin(tf.reduce_mean(tf.pow(j-vq_dictionary, 2), axis=-1))] for j in tf.unstack(i, axis=0) 
-                               ], axis=0)
-                      , ze, parallel_iterations=64)
+        ## crate the quantized vector dictionary 
+        ## the length of the code is 32. Here create a codebook with the code length of 4. We need to concate it for 8 times.
+        vq_dictionary = tf.Variable(tf.random.uniform([dic_size, 4]), trainable=True, dtype=tf.float32, name='vq_dictionary')
+        zq_s = [i for i in range(8)]
+        for i in range(8):
+            ze_s = tf.slice(ze, [0, 0, 4 * i], [-1, conv3e.shape[1] * conv3e.shape[2], 4])
+            zq_s[i] = tf.map_fn(lambda i:                                                                                            tf.stack([ 
+                                          vq_dictionary[tf.argmin(tf.reduce_mean(tf.pow(j-vq_dictionary, 2), axis=-1))] for j in tf.unstack(i, axis=0) 
+                                         ], axis=0)                                                                                  , ze_s, parallel_iterations=32)
+        pass
+        zq = tf.concat(zq_s, axis=-1)
+    
     zq = ze + tf.stop_gradient(zq - ze)
     zq = tf.reshape(zq, [-1, conv3e.shape[1].value, conv3e.shape[2].value, conv3e.shape[3].value])
     with tf.variable_scope('vqvae_d'):
@@ -61,7 +63,7 @@ def main():
     # losses
     dec_loss = tf.reduce_mean(tf.pow(X - X_, 2)) #zq => X_
     vq_loss  = tf.reduce_mean(tf.pow((tf.stop_gradient(VQVAE_ze) - VQVAE_zq), 2)) * beta  #ze => zq
-    enc_loss = tf.reduce_mean(tf.pow((VQVAE_ze - tf.stop_gradient(VQVAE_zq)), 2))   #X => zq
+    enc_loss = tf.reduce_mean(tf.pow((VQVAE_ze - tf.stop_gradient(VQVAE_zq)), 2)) * (1 - gamma)  #X => zq
     
     # gradients for applying
     opt = tf.train.RMSPropOptimizer(learning_rate=LR, centered=True, momentum=.9).minimize(dec_loss + vq_loss + enc_loss + vae_loss * gamma)
@@ -81,7 +83,7 @@ def main():
     for i in range(500):
         print('.', end='')
         batch_x, _ = mnist.train.next_batch(batch_size)
-        _, c_loss = sess.run([opt, dec_loss],feed_dict={X:np.reshape(batch_x, [-1, 28, 28, 1]), LR:0})
+        _, c_loss = sess.run([opt, dec_loss],feed_dict={X:np.reshape(batch_x, [-1, 28, 28, 1]), LR:1E-9})
     print("warming up complete...")
 
     for i in range(iteration):
