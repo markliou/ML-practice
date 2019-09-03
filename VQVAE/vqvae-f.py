@@ -13,7 +13,7 @@ iteration = 5000
 # 一開始code book 的更新很小是擔心更新太快會讓原本呈現常態分佈的code book太快偏離
 # 原本的常態分佈。因此如果encoder已經強烈鎖定在用常態分布，那code book最終應該也會
 # 偏向使用常態分佈。因此這邊把beta可以稍微調整大一點。
-beta = .5
+beta = .9
 gamma = .9
 
 def VQVAE(X, act=tf.nn.elu, dic_size=128):
