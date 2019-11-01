@@ -76,6 +76,7 @@ def conv_net(x, dropout):
 
 # Construct model
 logits = conv_net(X, keep_prob)
+prediction = tf.cast(tf.round(logits), tf.int64)
 print(logits)
 #exit()
 
@@ -90,7 +91,7 @@ train_op = optimizer.minimize(loss_reg_op)
 # Evaluate model
 #correct_pred = tf.equal(tf.argmax(prediction, 1), tf.argmax(Y, 1))
 #accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
-correct_pred = tf.equal(tf.cast(tf.round(logits), tf.int32), tf.cast(tf.argmax(Y,1), tf.int32))
+correct_pred = tf.equal(prediction ,tf.argmax(Y,1))
 accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 
 # Initialize the variables (i.e. assign their default value)
@@ -111,15 +112,17 @@ with tf.Session() as sess:
         sess.run(train_op, feed_dict={X: batch_x, Y: batch_y, keep_prob: .8})
         if step % display_step == 0 or step == 1:
             # Calculate batch loss and accuracy
-            [loss, acc, c_logits] = sess.run([loss_reg_op, accuracy, tf.round(logits)], feed_dict={X: batch_x,
+            [loss, acc, c_prediction] = sess.run([loss_reg_op, accuracy, prediction], 
+                                                            feed_dict={X: batch_x,
                                                                        Y: batch_y,
                                                                        keep_prob: 1.0})
             print("Step {} loss:{:.4f} acc:{}".format(step, loss, acc))
             
             #c_logits = sess.run(logits, feed_dict={X: batch_x, Y: batch_y, keep_prob:1.0})
             print('##')
-            print(c_logits)
-            print(sess.run(tf.argmax(batch_y, -1)))
+            print(c_prediction)
+            #print(sess.run(tf.argmax(batch_y, -1)))
+            print(np.argmax(batch_y, -1))
             #print(sess.run(tf.cast(tf.argmax(batch_y, 0), tf.int32)))
 
     print("Optimization Finished!")
