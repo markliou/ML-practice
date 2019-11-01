@@ -18,9 +18,9 @@ from tensorflow.examples.tutorials.mnist import input_data
 mnist = input_data.read_data_sets("/tmp/data/", one_hot=True)
 
 # Training Parameters
-learning_rate = 1E-4
+learning_rate = 1E-5
 num_steps = 50000000
-batch_size = 1
+batch_size = 128
 display_step = 100
 
 # Network Parameters
@@ -53,7 +53,7 @@ def conv_net(x, dropout):
 
     # Convolution Layer
     conv2 = tf.keras.layers.Conv2D(128, [3, 3], strides=[1,1], activation=tf.nn.tanh, padding='SAME')(conv1)
-    for i in range(3):
+    for i in range(5):
         conv2 = tf.keras.layers.Conv2D(128, [3,3], strides=[1,1], activation=tf.nn.tanh, padding='SAME')(conv2)
     # Max Pooling (down-sampling)
     conv2 = maxpool2d(conv2, k=2)
@@ -66,10 +66,10 @@ def conv_net(x, dropout):
     #fc1 = tf.nn.dropout(fc1, dropout)
     
     fc2 = tf.keras.layers.Dense(1024, activation=tf.nn.tanh)(fc1)
-    fc3 = tf.keras.layers.Dense(1024, activation=tf.nn.tanh)(fc2)
-    fc4 = tf.keras.layers.Dense(1024, activation=tf.nn.tanh)(fc3)
-    for i in range(25):
-        fc4 = tf.keras.layers.Dense(1024, activation=tf.nn.tanh)(fc4)
+    fc3 = tf.keras.layers.Dense(128, activation=tf.nn.tanh)(fc2)
+    fc4 = tf.keras.layers.Dense(256, activation=tf.nn.tanh)(fc3)
+    for i in range(10):
+        fc4 = tf.keras.layers.Dense(512, activation=tf.nn.tanh)(fc4)
     # Output, class prediction
     out = tf.keras.layers.Dense(1)(fc4)
     return out
@@ -83,15 +83,20 @@ print(logits)
 # Define loss and optimizer
 #loss_op = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
 #    logits=logits, labels=Y))
-loss_reg_op = tf.reduce_mean(tf.abs(tf.pow( (logits - tf.cast(tf.argmax(Y,1), tf.float32)),1 )))
-optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+#loss_reg_op = tf.reduce_mean(tf.abs(tf.pow( (logits - tf.cast(tf.argmax(Y,1), tf.float32)), 1)))
+loss_reg_op = tf.reduce_mean(tf.abs(tf.pow( (tf.reshape(logits, [-1]) - tf.reshape(tf.cast(tf.argmax(Y,1), tf.float32),[-1])), 1)))
+
+#optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+#optimizer = tf.train.MomentumOptimizer(learning_rate=learning_rate, momentum=0.9, use_nesterov=True)
+#optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, momentum=0.9)
+optimizer = tf.train.AdamOptimizer(learning_rate)
 train_op = optimizer.minimize(loss_reg_op)
 
 
 # Evaluate model
 #correct_pred = tf.equal(tf.argmax(prediction, 1), tf.argmax(Y, 1))
 #accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
-correct_pred = tf.equal(prediction ,tf.argmax(Y,1))
+correct_pred = tf.equal(tf.reshape(prediction, [-1]) ,tf.argmax(Y,1))
 accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 
 # Initialize the variables (i.e. assign their default value)
@@ -119,10 +124,10 @@ with tf.Session() as sess:
             print("Step {} loss:{:.4f} acc:{}".format(step, loss, acc))
             
             #c_logits = sess.run(logits, feed_dict={X: batch_x, Y: batch_y, keep_prob:1.0})
-            print('##')
-            print(c_prediction)
+            #print('##')
+            #print(c_prediction)
             #print(sess.run(tf.argmax(batch_y, -1)))
-            print(np.argmax(batch_y, -1))
+            #print(np.argmax(batch_y, -1))
             #print(sess.run(tf.cast(tf.argmax(batch_y, 0), tf.int32)))
 
     print("Optimization Finished!")
