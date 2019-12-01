@@ -18,11 +18,11 @@ tfrecorder_name = tf.data.Dataset.list_files(['*.tfr']) # or use the module in t
 
 # give the feature description
 tfr_feature = { 
-                'pic'     : tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True)
-               ,'size'    : tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True)
-               ,'channel' : tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True)
-               ,'shape'   : tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True)
-               ,'label'   : tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True)
+                'pic'     : tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True) # if the content is dynamic, using FixedLenSequenceFeature with allow_missing is a good solution
+               ,'size'    : tf.io.FixedLenFeature([2], tf.int64) # if the content is fixed, define the element number
+               ,'channel' : tf.io.FixedLenFeature([], tf.int64) # 'channel' is the rank 1, so let [] be blank might be OK.
+               ,'shape'   : tf.io.FixedLenFeature([3], tf.int64)
+               ,'label'   : tf.io.FixedLenFeature([1], tf.int64)
               }
 
 ##### build the TFRecorder dataset object
@@ -104,7 +104,11 @@ def _parse_img(example_proto):
 parsed_label = dataset.map(_parse_img)
 parsed_label_iter = parsed_label.make_initializable_iterator()
 parsed_label_go = parsed_label_iter.get_next()
+recovered_pic = tf.reshape(parsed_label_go['pic'], parsed_label_go['shape'])
 sess.run(parsed_label_iter.initializer)
 print(sess.run(parsed_label_go))
+recovered_pic = sess.run(recovered_pic)
+print(recovered_pic)
+print(np.shape(recovered_pic))
 
 sess.close()
