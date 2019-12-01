@@ -83,17 +83,21 @@ for i in example:
     pics.append(pic)
     labels.append(label)
 
-## try the tf.io.parse_single_example
-## But this seems NOT work fine in TF v1
+# ## try the tf.io.parse_single_example
+# # But this seems NOT work fine in TF v1
 # dataset = tf.data.TFRecordDataset(tfrecorder_name)
 # def _parse_img(example_proto):
-#     return tf.io.parse_single_example(example_proto, tfr_feature)
-# parsed_img = dataset.map(_parse_img)
-# print(parsed_img)
-# print(type(parsed_img))
-# # exit()
-# for img_feature in parsed_img:
-#     pr = sess.run(img_feature['label'])
-#     print(pr)
+#     parsed =  tf.io.parse_single_example(example_proto, tfr_feature)
+#     print('--')
+#     print(parsed)
+#     print('**')
+#     print(parsed['label'])
+#     print('--')
+#     return parsed['label']
+# parsed_label = dataset.map(_parse_img).make_initializable_iterator()
+# parsed_label_iter = parsed_label.get_next()
+# sess.run(parsed_label.initializer)
+# print(sess.run(parsed_label_iter))
+# exit()
 
 sess.close()
