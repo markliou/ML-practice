@@ -18,11 +18,11 @@ tfrecorder_name = tf.data.Dataset.list_files(['*.tfr']) # or use the module in t
 
 # give the feature description
 tfr_feature = { 
-                'pic'     : tf.io.FixedLenFeature([], tf.int64)
-               ,'size'    : tf.io.FixedLenFeature([], tf.int64)
-               ,'channel' : tf.io.FixedLenFeature([], tf.int64)
-               ,'shape'   : tf.io.FixedLenFeature([], tf.int64)
-               ,'label'   : tf.io.FixedLenFeature([], tf.int64)
+                'pic'     : tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True)
+               ,'size'    : tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True)
+               ,'channel' : tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True)
+               ,'shape'   : tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True)
+               ,'label'   : tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True)
               }
 
 ##### build the TFRecorder dataset object
@@ -83,21 +83,28 @@ for i in example:
     pics.append(pic)
     labels.append(label)
 
-# ## try the tf.io.parse_single_example
-# # But this seems NOT work fine in TF v1
-# dataset = tf.data.TFRecordDataset(tfrecorder_name)
-# def _parse_img(example_proto):
-#     parsed =  tf.io.parse_single_example(example_proto, tfr_feature)
-#     print('--')
-#     print(parsed)
-#     print('**')
-#     print(parsed['label'])
-#     print('--')
-#     return parsed['label']
-# parsed_label = dataset.map(_parse_img).make_initializable_iterator()
-# parsed_label_iter = parsed_label.get_next()
-# sess.run(parsed_label.initializer)
-# print(sess.run(parsed_label_iter))
-# exit()
+## try the tf.io.parse_single_example
+# If your data have a "fixed" data, using FixedLenFeature, as mentioned in tutorial, would work,
+# but since most data would not be the same, such as the difference size of picture, using
+# 'FixedLenSequenceFeature' in feature descriptor would be suggested. Such as :
+# tfr_feature = { 
+#                 'pic'     : tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True)
+#                ,'size'    : tf.io.FixedLenSequenceFeature([2], tf.int64, allow_missing=True)
+#                ,'channel' : tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True)
+#                ,'shape'   : tf.io.FixedLenSequenceFeature([3], tf.int64, allow_missing=True)
+#                ,'label'   : tf.io.FixedLenSequenceFeature([], tf.int64, allow_missing=True)
+#               }
+# Remember to set "allow_missing=True" to allow the different size format
+
+dataset = tf.data.TFRecordDataset(tfrecorder_name)
+
+def _parse_img(example_proto):
+    return tf.io.parse_single_example(example_proto, tfr_feature)
+
+parsed_label = dataset.map(_parse_img)
+parsed_label_iter = parsed_label.make_initializable_iterator()
+parsed_label_go = parsed_label_iter.get_next()
+sess.run(parsed_label_iter.initializer)
+print(sess.run(parsed_label_go))
 
 sess.close()
