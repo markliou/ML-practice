@@ -1,6 +1,6 @@
 import tensorflow as tf 
 import numpy as np 
-import cv2 
+# import cv2 
 
 # The basic idea of the TFrecorder is to use the binary format to enhancing the performace.
 # 1. tf.data.Example: like the template. This will give the TFrecorder the format.
@@ -18,7 +18,14 @@ import cv2
 #    Feature module uses this kind of format. Some criteria should be noticed:
 #    * the input should be a flat list
 #    * all the input needed a position, e.g. specified the 'value'
-
+# 5. The Example object should be written with the "string" into the file using tf.io.TFRecordWriter. 
+#    Before writing, the Example need to transform to string with Example.SerializeToString method.
+#
+# reference:
+# https://zhuanlan.zhihu.com/p/40588218
+# https://www.jianshu.com/p/78467f297ab5
+# https://blog.gtwang.org/programming/tensorflow-read-write-tfrecords-data-format-tutorial/
+# https://www.tensorflow.org/tutorials/load_data/tfrecord
 
 # set the basic parameters
 pics = ['1.jpg', '2.jpg']
@@ -42,13 +49,14 @@ for i in range(len(pics)):
               'pic'     : tf.train.Feature(int64_list=tf.train.Int64List(value=np.reshape(pic_con, [-1]).tolist()))
              ,'size'    : tf.train.Feature(int64_list=tf.train.Int64List(value=list(pic_con.shape[0:2])))
              ,'channel' : tf.train.Feature(int64_list=tf.train.Int64List(value=[pic_con.shape[2]]))
+             ,'shape'   : tf.train.Feature(int64_list=tf.train.Int64List(value=list(pic_con.shape[:])))
              ,'label'   : tf.train.Feature(int64_list=tf.train.Int64List(value=[lables[i]]))
             }
     # print(feature)
     
     ##### make the Example object
     sample = tf.train.Example(
-                             features=tf.train.Features(feature=feature)
+                              features=tf.train.Features(feature=feature)
                              )
     # print(tf.train.Features(feature={'pic':tf.train.Int64List(value=np.reshape(pic_con, [-1]).tolist()) }))
     # print(tf.train.Int64List(value=np.reshape(pic_con, [-1]).tolist()))
@@ -58,7 +66,7 @@ for i in range(len(pics)):
     ##### write the Example objects into a file
     # print(sample)
     # print(sample.SerializeToString())
-    
+    # print(tf.train.Example.FromString(sample.SerializeToString())) # check it this can be revered by FromString method
     writer.write(sample.SerializeToString())
 
 pass
