@@ -33,8 +33,8 @@ batch_size = 1000
 display_step = 10
 
 # Network Parameters
-n_hidden_1 = 10000 # 1st layer number of neurons
-n_hidden_2 = 10000 # 2nd layer number of neurons
+n_hidden_1 = 10 # 1st layer number of neurons
+n_hidden_2 = 10 # 2nd layer number of neurons
 n_input = 784 # MNIST data input (img shape: 28*28)
 n_classes = 10 # MNIST total classes (0-9 digits)
 
