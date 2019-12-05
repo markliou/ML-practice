@@ -24,7 +24,7 @@ def attention_test():
     decoder_hidden_dim = 17
     attenion_embeding_dim = 11
     seq_length = x_data.shape[1]
-    output_seq_length = 30
+    output_seq_length = 50
     embedding_dim = 8
 
     # init = np.arange(vocab_size*embedding_dim).reshape(vocab_size,-1)
@@ -40,7 +40,7 @@ def attention_test():
         
         ##### encoder
         # the encoder will give the shape of [3,6,13] of the states, and the final output of [3,13]
-        en_hiden_stats, encoder_res = tf.keras.layers.GRU(units=hidden_dim, return_sequences=True, return_state=True)(inputs)
+        en_hiden_stats, encoder_res = tf.keras.layers.GRU(units=encoder_hidden_dim, return_sequences=True, return_state=True)(inputs)
         # print(encoder_res)
         # print(en_hiden_stats)
         # exit()
@@ -55,89 +55,92 @@ def attention_test():
             # the decoder_res is expect to be the shape of [17]. To simply using the dense layer, expanding the dimention would be an easy way
             de_hiden_stats_Q = tf.expand_dims(decoder_res, 0) # shape:[1, 17]
             de_hiden_stats_Q = tf.keras.layers.Dense(attenion_embeding_dim)(de_hiden_stats_Q) # shape:[1, 11]
-            de_hiden_stats_Q = tf.reshape(de_hiden_stats_Q, [None])
+            de_hiden_stats_Q = tf.reshape(de_hiden_stats_Q, [-1])
+            # exit()
             
             # calculate the dot scores between encoder_res_K and de_hiden_stats_Q. Get the softmax of each state
-            scores = tf.map_fn(lambda x: tf.reduce_sum( x * de_hiden_stats_Q), encoder_res_K)
+            scores = tf.map_fn(lambda x: tf.reduce_sum( x * de_hiden_stats_Q), encoder_res_K )
             weights = tf.nn.softmax(scores)
+            # print(scores)
+            # print(weights)
+            # exit()
 
-            # using the K as the final output value directly according to the attention weights
-            V = tf.reduce_sum(encoder_res_K * tf.expand_dims(weights, 0), axis=0)
+            # using the K as the final output value directly according to the attention weights. Final V should be [13]
+            V = en_hiden_stats * tf.expand_dims(weights, 1)
+            # print(V)
+            # exit()
+            V = tf.reduce_sum(V, axis=0)
+            # print(V)
+            # exit()
 
             return V, weights
+            # return V
         pass 
 
         ##### decoder
-        en_hiden_stats, encoder_res = tf.keras.layers.GRU(units=hidden_dim, return_sequences=True, return_state=True)(inputs)
+        # Feeding the final state of the encoder into the decoder
+        # The shape of output state of the decoder is [3, 17]. If the decoder state is concated with attention, the embedding 
+        # is expected to be [30] (17+13)
+        decoder = tf.keras.layers.GRU(units=decoder_hidden_dim, return_sequences=False, return_state=False)
+        
+        # The input of the decoder is expected to be the embedding shape of [30]. So, the inputs from the final output of encoder,
+        # which is [13] are padded using 0.
+        padded_encoder_res = tf.map_fn(lambda x: tf.concat([x, tf.zeros([17], dtype=tf.float32)], axis=-1), encoder_res)
         # print(encoder_res)
-        # print(en_hiden_stats)
+        # print(padded_encoder_res)
         # exit()
 
-        #encoder_outputs은 Encoder의 output이다. 보통 Memory라 불린다. 여기서는 toy model이기 때문에 ranodm값을 생성하여 넣어 준다.
-        encoder_outputs = tf.convert_to_tensor(np.random.normal(0,1,[batch_size,20,30]).astype(np.float32)) # 20: encoder sequence length, 30: encoder hidden dim
-        
-        # encoder_outpus의 길이는 20이지만, 다음과 같이 조절할 수 있다.
-        input_lengths = [5,10,20]  # encoder에 padding 같은 것이 있을 경우, attention을 주지 않기 위해
-        
-        # attention mechanism  # num_units = Na = 11
-        attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(num_units=11, memory=encoder_outputs,memory_sequence_length=input_lengths,normalize=False)
+        # get the first state for get the attention. Since the RNN cell have the sequence length in the Rank 3 tensor, 
+        # the state from previous RNN would need to expand the dimention
+        padded_encoder_res = tf.expand_dims(padded_encoder_res, 1) # shape: [3, 1, 30]
+        de_state = decoder(padded_encoder_res) # shape: [3,17]
+        # print(de_state)
+        # exit()
 
-        
-        attention_initial_state = cell.zero_state(batch_size, tf.float32)
-        cell = tf.contrib.seq2seq.AttentionWrapper(cell, attention_mechanism, attention_layer_size=13,initial_cell_state=attention_initial_state,
-                                                   alignment_history=alignment_history_flag,output_attention=True)
-        cell = tf.contrib.rnn.OutputProjectionWrapper(cell,output_dim)
-        
-        # 여기서 zero_state를 부르면, 위의 attentionwrapper에서 넘겨준 attention_initial_state를 가져온다. 즉, AttentionWrapperState.cell_state에는 넣어준 값이 들어있다.
-        initial_state = cell.zero_state(batch_size, tf.float32) # AttentionWrapperState
- 
-        helper = tf.contrib.seq2seq.TrainingHelper(inputs, np.array([seq_length]*batch_size))
-
-        decoder = tf.contrib.seq2seq.BasicDecoder(cell=cell,helper=helper,initial_state=initial_state)    
-
-        outputs, last_state, last_sequence_lengths = tf.contrib.seq2seq.dynamic_decode(decoder=decoder,output_time_major=False,impute_finished=True)
-     
-        weights = tf.ones(shape=[batch_size,seq_length])
-        loss =   tf.contrib.seq2seq.sequence_loss(logits=outputs.rnn_output, targets=Y, weights=weights)
-     
-        opt = tf.train.AdamOptimizer(0.01).minimize(loss)
-        
-        sess.run(tf.global_variables_initializer())
-        for i in range(100):
-            loss_,_ =sess.run([loss,opt])
-            print("{} loss: = {}".format(i,loss_))
-        
-        if alignment_history_flag ==False:
-            print("initial_state: ", sess.run(initial_state))
-        print("\n\noutputs: ",outputs)
-        o = sess.run(outputs.rnn_output)  #batch_size, seq_length, outputs
-        o2 = sess.run(tf.argmax(outputs.rnn_output,axis=-1))
-        print("\n",o,o2) #batch_size, seq_length, outputs
-     
-        print("\n\nlast_state: ",last_state)
-        if alignment_history_flag == False:
-            print(sess.run(last_state)) # batch_size, hidden_dim
-        else:
-            print("alignment_history: ", last_state.alignment_history.stack())
-            alignment_history_ = sess.run(last_state.alignment_history.stack())
-            print(alignment_history_)
-            print("alignment_history sum: ",np.sum(alignment_history_,axis=-1))
+        ## since the attention machanism is implement with unstack form, the samples are 
+        ## unstack here. But this style is not good.
+        en_hiden_stats_slices = tf.unstack(en_hiden_stats, axis=0)
+        # print(en_hiden_stats_slices)
+        de_state_slices = tf.unstack(de_state, axis=0)
+        # print(de_state_slices)
+        # exit()
+        batch_collector = []
+        for c_batch_ind in range(len(de_state_slices)):
+            seq_collector = []
+            de_state_slice = de_state_slices[c_batch_ind]
+            en_hiden_stats_slice = en_hiden_stats_slices[c_batch_ind]
+            for c_output_seq_len in range(output_seq_length - 1):
+                ### get the attention
+                V, weights = attention(de_state_slice, en_hiden_stats_slice)
+                ### merge the attention into the input
+                de_input = tf.concat([de_state_slice, V], axis=-1) # shape: [30]
+                ### decoding
+                decoder_res = tf.expand_dims(tf.expand_dims(de_input, 0), 0) # shape: [1, 1, 30]
+                de_state_slice = decoder(decoder_res, initial_state=tf.expand_dims(de_state_slice, 0)) # shape: [1,17]
+                # de_state_slice = decoder(decoder_res, initial_state=None) # shape: [1,17]
+                de_state_slice = tf.reshape(de_state_slice, [-1]) # shape: [17]
+                ### recording the states
+                seq_collector.append(tf.identity(de_state_slice))
+            pass
+            # print(seq_collector)
+            # exit()
+            batch_collector.append(tf.stack(seq_collector, axis=0))
             
-            print("cell_state: ", sess.run(last_state.cell_state))
-            print("attention: ", sess.run(last_state.attention))
-            print("time: ", sess.run(last_state.time))
-            
-            alignments_ = sess.run(last_state.alignments)
-            print("alignments: ", alignments_)
-            print('alignments sum: ', np.sum(alignments_,axis=1))   # alignments의 합이 1인지 확인
-            print("attention_state: ", sess.run(last_state.attention_state))
+        pass
+        # print(batch_collector)
+        # exit()
+        
+        decoder_output = tf.stack(batch_collector, axis=0)
+        print(decoder_output)
 
-        print("\n\nlast_sequence_lengths: ",last_sequence_lengths)
-        print(sess.run(last_sequence_lengths)) #  [seq_length]*batch_size    
-     
-        p = sess.run(tf.nn.softmax(outputs.rnn_output)).reshape(-1,output_dim)
-        print("loss: {:20.6f}".format(sess.run(loss)))
-        print("manual cal. loss: {:0.6f} ".format(np.average(-np.log(p[np.arange(y_data.size),y_data.flatten()]))) )   
+    sess.run(tf.global_variables_initializer())
+    return sess.run(decoder_output)
+
+
+
+
 
 if __name__ == '__main__':
-    attention_test()
+    output = attention_test()
+    print(output)
+    print(output.shape)

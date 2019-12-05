@@ -37,7 +37,7 @@ def main():
 
     print("\n=== GRU ===")
     GRU_seq    = tf.keras.layers.GRU(5, return_sequences=True, return_state=False)
-    GRU_no_seq = tf.keras.layers.GRU(5, return_sequences=False, return_state=False)
+    GRU_no_seq = tf.keras.layers.GRU(25, return_sequences=False, return_state=False)
     # LSTM = tf.keras.layers.LSTM(128)
     gru_seq = GRU_seq(embedding, mask=None, training=False, initial_state=None)
     gru_no_seq = GRU_no_seq(embedding, mask=None, training=False, initial_state=None)
