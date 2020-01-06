@@ -44,13 +44,47 @@ print('== the keras variables playground start ==')
 def cnn_trainable_variables(keras_model):
     model = keras_model
     total_variables_of_model = 0
+    anchors = []
+
+    # couting the toal variable number of the keras model
     for i in model.trainable_variables:
-        total_variables_of_model += sum(i.shape)
+        counter = i.shape[0]
+        for j in i.shape[1:]:
+            counter *= j
+        pass
+        anchors.append(counter)
+        total_variables_of_model += counter
     pass
+    print(total_variables_of_model)
+    print(model.summary())
+
+    ## exchanging the weights as thought
+    opt_weights = np.array([i * 1.0 for i in range(total_variables_of_model)])
+    print(opt_weights)
+    print('==before exchange==')
+    print(model.trainable_variables)
+    exchange_model_weights(model, opt_weights, anchors)
+    print('==after exchange==')
+    print(model.trainable_variables)
+    print('==')
+
+
 pass
 
+def exchange_model_weights(keras_model, weight_list, anchors):
+    model = keras_model
+    s_index = 0
+    anchor_index = 0
+    for i in model.trainable_variables:
+        e_index = s_index + anchors[anchor_index]
+        i.assign(np.reshape(weight_list[s_index:e_index], i.shape))
+        s_index += e_index 
+        anchor_index += 1
+    pass 
+    return model
+pass 
 
-print(cnn_trainable_variables(model))
+cnn_trainable_variables(model)
 
 
 print('== the keras variables playground finish ==')
