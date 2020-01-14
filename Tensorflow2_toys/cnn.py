@@ -85,6 +85,7 @@ for iteration_step in range(iteration_num):
     # print(loss)
     t_grad = tape.gradient(loss, c_cnn_model.trainable_variables)
     # print(t_grad)
+    t_grad = [(tf.clip_by_value(grad, -1.0, 1.0)) for grad in t_grad] # also can play the gradient, such as the gradient clipping
     Optimizer.apply_gradients(zip(t_grad, c_cnn_model.trainable_variables))
 
     ## method 2: using the minimize of the optimizer
