@@ -88,10 +88,11 @@ for iteration_step in range(iteration_num):
     Optimizer.apply_gradients(zip(t_grad, c_cnn_model.trainable_variables))
 
     ## method 2: using the minimize of the optimizer
-    predicts = c_cnn_model(img_fetcher)
     def loss_m():
-    # since the tensorflow's softmax_cross_entropy_with_logits caused some problems (such as the strange abnormal values),
-    # we also implement this function by hand.
+    # we still need to put the model into this callable function for catching the variables the model using
+        predicts = c_cnn_model(img_fetcher)
+        # since the tensorflow's softmax_cross_entropy_with_logits caused some problems (such as the strange abnormal values),
+        # we also implement this function by hand.
         return tf.reduce_mean(-tf.reduce_sum(tf.cast(lab_fetcher, dtype=tf.float32) * tf.math.log(tf.nn.softmax(predicts)+1e-15), axis=-1), axis=-1)
     Optimizer.minimize(loss_m, c_cnn_model.trainable_variables) # the loss for minimize method should be a function to calling
 
