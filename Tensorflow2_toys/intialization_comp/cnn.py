@@ -17,7 +17,7 @@ def cnn_model():
     # print(flatten)
     fc1 = tf.keras.layers.Dense(256, activation=tf.nn.relu)(flatten)
     for i in range(100):
-        fc1 = tf.keras.layers.Dense(256, activation=tf.nn.elu)(fc1)
+        fc1 = tf.keras.layers.Dense(256, activation=tf.nn.elu, kernel_initializer=tf.random_normal_initializer(mean=.0, stddev=.001))(fc1)
     fc2 = tf.keras.layers.Dense(128, activation=tf.nn.elu)(fc1) 
     out = tf.keras.layers.Dense(10, activation=None, kernel_initializer=tf.random_normal_initializer(mean=.0, stddev=.99))(fc2) 
     # print(out)
@@ -70,42 +70,61 @@ tr_dataset = tr_dataset.shuffle(buffer_size=10000)
 # exit()
 
 ### setting the training parameters
-learning_rate = 1E-5
+learning_rate = 1E-4
 warming_iter = 1000
 iteration_num = 500000
 
+OptimizerW = tf.keras.optimizers.RMSprop(learning_rate=learning_rate, centered=True)
 Optimizer = tf.keras.optimizers.RMSprop(learning_rate=learning_rate, centered=True)
 
+# # warming with noise
+# for warming_iter in range(500):
+#     tr_dataset_fetcher = next(iter(tr_dataset))
+#     img_fetcher, lab_fetcher = tr_dataset_fetcher['img'], tf.one_hot(tf.reshape(tr_dataset_fetcher['lab'], shape=[-1,]), depth=10, on_value=1, off_value=0)
+    
+#     in1 = np.reshape(np.random.laplace(0, 1, 32 * 32 * 32 * 3), [32, 32, 32, 3])
+#     in2 = np.reshape(np.random.normal(0, 1, 32 * 32 * 32 * 3), [32, 32, 32, 3])
+#     in3 = (in1  + in2 *.3 )
+#     with tf.GradientTape() as tape:
+#         predict1 = w_cnn_model(in1)
+#         predict2 = w_cnn_model(in2)
+#         predict3 = w_cnn_model(in3)
+#         predict1_oh = tf.cast(tf.one_hot(tf.argmax(predict1, axis=-1), depth=10, on_value=1, off_value=0), dtype=tf.float32)
+#         predict2_oh = tf.cast(tf.one_hot(tf.argmax(predict2, axis=-1), depth=10, on_value=1, off_value=0), dtype=tf.float32)
+#         predict3_oh = tf.cast(tf.one_hot(tf.argmax(predict3, axis=-1), depth=10, on_value=1, off_value=0), dtype=tf.float32)
+#         loss_w = tf.reduce_mean(-tf.reduce_sum(predict1_oh * tf.math.log(tf.nn.softmax(predict3)+1e-15), axis=-1)) #+ tf.reduce_mean(tf.reduce_sum(-tf.math.log(tf.nn.softmax(predict3)+1e-15), axis=0))
+#         # loss_w = tf.reduce_mean(-tf.reduce_sum(tf.nn.softmax(predict1) * tf.math.log(tf.nn.softmax(predict3)+1e-15), axis=-1)) + tf.reduce_mean(-tf.reduce_sum(tf.nn.softmax(predict2) * tf.math.log(tf.nn.softmax(predict3)+1e-15), axis=-1)) + tf.reduce_mean(tf.reduce_sum(-tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1))
+#         #print(predict2_oh)
+#         #return tf.reduce_mean(-tf.reduce_sum(tf.cast(lab_fetcher, dtype=tf.float32) * tf.math.log(tf.nn.softmax(predicts)+1e-15), axis=-1), axis=-1)
+#         #return tf.reduce_mean(tf.reduce_sum(-tf.nn.softmax(predict2) * tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1))
+#         #return tf.reduce_mean(-tf.reduce_sum(tf.nn.softmax(predict3) * tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1))
+        
+#         #return tf.reduce_mean(-tf.reduce_sum(tf.nn.softmax(predict3) * tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1)) - .1 * tf.reduce_mean(tf.reduce_sum(-tf.nn.softmax(predict2) * tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1))
+#         #return tf.reduce_mean(-tf.reduce_sum(predict3_oh * tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1)) - 1 * tf.reduce_mean(-tf.reduce_sum(predict2_oh * tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1))
+#         #return tf.reduce_mean(tf.reduce_sum(-tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1))
+#         #return tf.reduce_mean(tf.reduce_mean(-tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1)) + tf.reduce_mean(-tf.reduce_sum(predict3_oh * tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1)) - tf.reduce_mean(-tf.reduce_sum(predict2_oh * tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1)) * .1
+#         #return -tf.abs(tf.reduce_mean(tf.reduce_mean(-tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1)) - tf.reduce_mean(tf.reduce_mean(-tf.math.log(tf.nn.softmax(predict2)+1e-15), axis=1)))
+#     t_grad = tape.gradient(loss_w, w_cnn_model.trainable_variables)
+#     t_grad = [grad + tf.random.normal(tf.shape(grad), mean=.0, stddev=1.) for grad in t_grad] # also can play the gradient, such as the gradient clipping
+#     Optimizer.apply_gradients(zip(t_grad, w_cnn_model.trainable_variables))
+#     print('warming step:{} loss:{}'.format(warming_iter, loss_w))
+
+# warming with target
 for warming_iter in range(500):
     tr_dataset_fetcher = next(iter(tr_dataset))
     img_fetcher, lab_fetcher = tr_dataset_fetcher['img'], tf.one_hot(tf.reshape(tr_dataset_fetcher['lab'], shape=[-1,]), depth=10, on_value=1, off_value=0)
-    def loss_w():
-    # since the tensorflow's softmax_cross_entropy_with_logits caused some problems (such as the strange abnormal values),
-    # we also implement this function by hand.
-        in1 = np.reshape(np.random.normal(0, 1, 32 * 32 * 32 * 3), [32, 32, 32, 3])
-        in2 = np.reshape(np.random.normal(0, 1, 32 * 32 * 32 * 3), [32, 32, 32, 3])
-        in3 = (in1  + in2  )*.5
-        predict1 = w_cnn_model(in1)
-        predict2 = w_cnn_model(in2)
-        predict3 = w_cnn_model(in3)
-        predict2_oh = tf.cast(tf.one_hot(tf.argmax(predict2, axis=-1), depth=10, on_value=1, off_value=0), dtype=tf.float32)
-        predict3_oh = tf.cast(tf.one_hot(tf.argmax(predict3, axis=-1), depth=10, on_value=1, off_value=0), dtype=tf.float32)
-        #print(predict2_oh)
-        #return tf.reduce_mean(-tf.reduce_sum(tf.cast(lab_fetcher, dtype=tf.float32) * tf.math.log(tf.nn.softmax(predicts)+1e-15), axis=-1), axis=-1)
-        #return tf.reduce_mean(tf.reduce_sum(-tf.nn.softmax(predict2) * tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1))
-        #return tf.reduce_mean(-tf.reduce_sum(tf.nn.softmax(predict3) * tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1))
-        return tf.reduce_mean(-tf.reduce_sum(tf.nn.softmax(predict1) * tf.math.log(tf.nn.softmax(predict3)+1e-15), axis=-1)) + tf.reduce_mean(-tf.reduce_sum(tf.nn.softmax(predict2) * tf.math.log(tf.nn.softmax(predict3)+1e-15), axis=-1)) + tf.reduce_mean(tf.reduce_sum(-tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1))
-        #return tf.reduce_mean(-tf.reduce_sum(tf.nn.softmax(predict3) * tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1)) - .1 * tf.reduce_mean(tf.reduce_sum(-tf.nn.softmax(predict2) * tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1))
-        #return tf.reduce_mean(-tf.reduce_sum(predict3_oh * tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1)) - 1 * tf.reduce_mean(-tf.reduce_sum(predict2_oh * tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1))
-        #return tf.reduce_mean(tf.reduce_sum(-tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1))
-        #return tf.reduce_mean(tf.reduce_mean(-tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1)) + tf.reduce_mean(-tf.reduce_sum(predict3_oh * tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1)) - tf.reduce_mean(-tf.reduce_sum(predict2_oh * tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1)) * .1
-        #return -tf.abs(tf.reduce_mean(tf.reduce_mean(-tf.math.log(tf.nn.softmax(predict1)+1e-15), axis=-1)) - tf.reduce_mean(tf.reduce_mean(-tf.math.log(tf.nn.softmax(predict2)+1e-15), axis=1)))
-    Optimizer.minimize(loss_w, w_cnn_model.trainable_variables)
-    print('warming step:{} loss:{}'.format(warming_iter, loss_w()))
-
-
+    
+    with tf.GradientTape() as tape:
+        predicts = w_cnn_model(img_fetcher)
+        loss_w = tf.reduce_mean(-tf.reduce_sum(tf.cast(lab_fetcher, dtype=tf.float32) * tf.math.log(tf.nn.softmax(predicts)+1e-15), axis=-1), axis=-1)
+    
+    t_grad = tape.gradient(loss_w, w_cnn_model.trainable_variables)
+    t_grad = [grad + tf.random.poisson(tf.shape(grad), lam=1) for grad in t_grad] # also can play the gradient, such as the gradient clipping
+    Optimizer.apply_gradients(zip(t_grad, w_cnn_model.trainable_variables))
+    print('warming step:{} loss:{}'.format(warming_iter, loss_w))
 
 ### optimization the mode
+tfboa_writer = tf.summary.create_file_writer('Tensorboard/')
 print('optimizing stage ...')
 for iteration_step in range(iteration_num):
     tr_dataset_fetcher = next(iter(tr_dataset))
@@ -120,17 +139,15 @@ for iteration_step in range(iteration_num):
         return tf.reduce_mean(-tf.reduce_sum(tf.cast(lab_fetcher, dtype=tf.float32) * tf.math.log(tf.nn.softmax(predicts)+1e-15), axis=-1), axis=-1)
     
     Optimizer.minimize(loss_m, c_cnn_model.trainable_variables) # the loss for minimize method should be a function to calling
-    Optimizer.minimize(loss_mw, w_cnn_model.trainable_variables)
+    OptimizerW.minimize(loss_mw, w_cnn_model.trainable_variables)
 
     # tensorboard
-    c_loss_m = loss_m()
-    c_loss_mw = loss_mw()
-    tf.summary.scalar('c_loss_m', opt_loss)
-    tf.summary.scalar('c_loss_mw', opt_loss)
-    tfboa_merged = tf.summary.merge_all()
-    tfboa_writer = tf.summary.FileWriter('Tensorboard/', sess.graph)
-
-
+    c_loss_m, c_loss_mw = loss_m(), loss_mw() 
+    with tfboa_writer.as_default():
+        tf.summary.scalar('c_loss_m', c_loss_m, step=iteration_step)
+        tf.summary.scalar('c_loss_mw', c_loss_mw, step=iteration_step)
+    
+    
     print('step:{} c_loss_m:{} c_loss_mw:{}'.format(iteration_step, c_loss_m, c_loss_mw))
     # exit()
 
