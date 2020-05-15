@@ -41,5 +41,14 @@ The detail is recorder in *tvm_converter.py* which will generate:
 1. .json
 2. .params 
 
+# inference using C compiler
+需要額外安裝三個必要的套件
+1. [dlpack](https://github.com/dmlc/dlpack) 
+2. [dmlc](https://github.com/dmlc/dmlc-core)
+編譯時記得把這兩個header加入到搜索位置(使用-I):
+```shell
+g++ -I tvm/include/ -I dmlc-core/include/ -I dlpack/include/ tvm_c_inference.c
+```
+
 # reference
 https://github.com/starmee/AI-Notes/blob/master/%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0/%E9%83%A8%E7%BD%B2%E6%A1%86%E6%9E%B6/TVM/TVM%E9%83%A8%E7%BD%B2.md#build-tensorflow
