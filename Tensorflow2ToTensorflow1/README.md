@@ -12,7 +12,8 @@ The model is made using TF2:
 
 # TF2_model_loader.py
 This file will load the models trained using TF2.2 and try to save it into TF 1.14 using .pb format.
-
+* output: K_model_tf1.pb
 
 # references
 https://www.codeleading.com/article/57322536101/
+https://docs.openvinotoolkit.org/latest/_docs_MO_DG_prepare_model_convert_model_Convert_Model_From_TensorFlow.html#freeze-the-tensorflow-model
