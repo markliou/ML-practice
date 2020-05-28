@@ -58,6 +58,7 @@ sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 
 episode = 0
+Rp = 0
 while(1):
     episode += 1
 # for episode in range(EPISODE):
@@ -94,7 +95,8 @@ while(1):
         Sp = S.copy()
         S, R, finish_flag, info = env.step(A)
 
-        Reward_cnt += R
+        Reward_cnt += R - Rp
+        Rp = R
         if Reward_cnt > REWARD_NORMA:
             REWARD_NORMA = (Reward_cnt + REWARD_NORMA)/2
         pass
