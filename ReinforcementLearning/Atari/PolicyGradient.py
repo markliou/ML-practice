@@ -48,6 +48,7 @@ Actions4Act = tf.placeholder(tf.uint8, [None])
 Actions4Act_oh = tf.one_hot(Actions4Act, 6) 
 
 Act_A = Q(Act_S)
+Command_A = tf.argmax(tf.nn.softmax(Act_A), axis=-1)
 
 # PL = Act_R * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
 PL = (Act_R/REWARD_NORMA) * tf.nn.softmax_cross_entropy_with_logits(labels=Actions4Act_oh, logits=Act_A)
@@ -89,7 +90,7 @@ while(1):
         if Greedy_flag or (np.random.random() < .05):
             A = np.random.randint(6)
         else:
-            A = sess.run(tf.argmax(tf.nn.softmax(Act_A), axis=-1), feed_dict={Act_S:np.array(S).reshape([1, 210, 160, 3])})[0]
+            A = sess.run(Command_A, feed_dict={Act_S:np.array(S).reshape([1, 210, 160, 3])})[0]
         pass
         # print(A) # monitor the action
 
