@@ -31,8 +31,8 @@ pass
 # Enviroment settings
 STEP_LIMIT = 1000
 EPISODE = 1000
-EPSILONE = 1.
-REWARD_b = 1
+EPSILONE = .8
+REWARD_b = .2
 REWARD_NORMA = 500 # because the peak reward is close to 500, empiritically
 GAMMA = .95
 DIE_PANELTY = 10
@@ -63,6 +63,7 @@ while(1):
     episode += 1
 # for episode in range(EPISODE):
     S = env.reset() #(210, 160, 3)
+    GameScore = 0
     Clives = 3
     Reward_cnt = 0
     CuReward = 0
@@ -96,6 +97,8 @@ while(1):
         S, R, finish_flag, info = env.step(A)
 
         Reward_cnt += R - Rp
+        GameScore += R
+        
         Rp = R
         if Reward_cnt > REWARD_NORMA:
             REWARD_NORMA = (Reward_cnt + REWARD_NORMA)/2
@@ -136,7 +139,7 @@ while(1):
                                     Actions4Act:np.array(A).reshape([-1])
                                     }
                             )
-        print('Action:{}  Loss:{} Epsilon:{} greedy:{}'.format(A, Loss, EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None), Greedy_flag))
+        print('Action:{}  Loss:{} Epsilon:{} greedy:{} score:{}'.format(A, Loss, EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None), Greedy_flag, GameScore))
 
     pass
     print("Epi:{}  Score:{}  Loss:{}".format(episode,Reward_cnt,Loss))
