@@ -2,6 +2,13 @@ import gym
 import tensorflow as tf
 import numpy as np
 
+try:
+    tf = tf.compat.v1
+    tf.disable_eager_execution()
+except ImportError:
+    pass
+
+
 def conv2d(X, kernel_size = 3, stride_no = 1):
     return tf.layers.conv2d(X, 32, 
                                [kernel_size, kernel_size], 
