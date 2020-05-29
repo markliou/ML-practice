@@ -118,7 +118,7 @@ while(1):
         
 
         # CuReward = CuReward * GAMMA + R
-        CuReward = CuReward * GAMMA + (Reward_cnt/R_space + R - REWARD_b)
+        CuReward = CuReward * GAMMA + (Reward_cnt/R_space - REWARD_b)
 
         # print('Reward:{}'.format(R)) # the reward will give this action will get how much scores. it's descreted.
         # print('Info:{}'.format(info['ale.lives'])) # info in space invader will give the lives of the current state
