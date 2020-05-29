@@ -32,7 +32,7 @@ pass
 STEP_LIMIT = 1000
 EPISODE = 1000
 EPSILONE = .8
-REWARD_b = .01
+REWARD_b = .1
 REWARD_NORMA = 500 # because the peak reward is close to 500, empiritically
 GAMMA = .95
 DIE_PANELTY = 100
@@ -107,13 +107,6 @@ while(1):
         else:
             R_space = 1E-9
         pass
-        
-        Rp = R
-        if Reward_cnt > REWARD_NORMA:
-            REWARD_NORMA = (Reward_cnt + REWARD_NORMA)/2
-        pass
-
-        # check the history of action
         
 
         # CuReward = CuReward * GAMMA + R
