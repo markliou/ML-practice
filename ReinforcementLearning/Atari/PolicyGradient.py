@@ -58,9 +58,9 @@ Opt = tf.train.MomentumOptimizer(learning_rate=1E-6, momentum=.8).minimize(PL)
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 
-episode += 1
+episode = 0
 while(1):
-    episode = 0
+    episode += 1
     Rp = 0
 # for episode in range(EPISODE):
     S = env.reset() #(210, 160, 3)
