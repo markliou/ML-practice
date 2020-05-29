@@ -32,10 +32,10 @@ pass
 STEP_LIMIT = 1000
 EPISODE = 1000
 EPSILONE = .8
-REWARD_b = .2
+REWARD_b = .01
 REWARD_NORMA = 500 # because the peak reward is close to 500, empiritically
 GAMMA = .95
-DIE_PANELTY = 50
+DIE_PANELTY = 100
 WARMING_EPI = 10
 
 env = gym.make('SpaceInvaders-v0') 
@@ -58,11 +58,11 @@ Opt = tf.train.MomentumOptimizer(learning_rate=1E-6, momentum=.8).minimize(PL)
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 
-
+episode = 0
 while(1):
     episode += 1
-    episode = 0
     Rp = 0
+    R_space = 1E-9 # counting the space time during hit target
 # for episode in range(EPISODE):
     S = env.reset() #(210, 160, 3)
     GameScore = 0
@@ -88,7 +88,7 @@ while(1):
 
         # sampling action from Q
         # epsilon greedy
-        if Greedy_flag or (np.random.random() < .1):
+        if Greedy_flag or (np.random.random() < .2):
             A = np.random.randint(6)
         else:
             A = sess.run(Command_A, feed_dict={Act_S:np.array(S).reshape([1, 210, 160, 3])})[0]
@@ -98,8 +98,15 @@ while(1):
         Sp = S.copy()
         S, R, finish_flag, info = env.step(A)
         GameScore += R
-        
+        R += .01 # also consider the live step as reward
+
         Reward_cnt += R - Rp # advantage, Q
+        
+        if R == 0 :
+            R_space += 1
+        else:
+            R_space = 1E-9
+        pass
         
         Rp = R
         if Reward_cnt > REWARD_NORMA:
@@ -110,7 +117,7 @@ while(1):
         
 
         # CuReward = CuReward * GAMMA + R
-        CuReward = CuReward * GAMMA + (Reward_cnt - REWARD_b)
+        CuReward = CuReward * GAMMA + (Reward_cnt + R - REWARD_b)
 
         # print('Reward:{}'.format(R)) # the reward will give this action will get how much scores. it's descreted.
         # print('Info:{}'.format(info['ale.lives'])) # info in space invader will give the lives of the current state
@@ -118,6 +125,7 @@ while(1):
         if finish_flag or (Clives > info['ale.lives']):
             Clives = info['ale.lives']
             Rp -= DIE_PANELTY * Clives
+            CuReward += Rp
             # CuReward = np.clip(CuReward, 0, None)
             # print('This episode is finished ...')
             sess.run(Opt, 
