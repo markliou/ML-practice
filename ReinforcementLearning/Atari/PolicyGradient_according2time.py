@@ -10,7 +10,7 @@ except ImportError:
 
 
 def conv2d(X, kernel_size = 3, stride_no = 1):
-    return tf.layers.conv2d(X, 32, 
+    return tf.layers.conv2d(X, 256, 
                                [kernel_size, kernel_size], 
                                [stride_no, stride_no], 
                                padding='SAME', 
@@ -29,7 +29,8 @@ def Q(S):
     conv6 = conv2d(conv5, stride_no=2) #(4, 3)
     
     f1 = tf.layers.flatten(conv6)
-    f2 = tf.layers.dense(f1, 32, activation=tf.nn.elu)
+    f2 = tf.layers.dense(f1, 512, activation=tf.nn.elu)
+    f2 = tf.layers.dense(f1, 1024, activation=tf.nn.elu)
     out = tf.layers.dense(f2, 6)
 
     return out
@@ -41,7 +42,7 @@ EPISODE = 1000
 EPSILONE = .8
 REWARD_b = .1
 REWARD_NORMA = 500 # because the peak reward is close to 500, empiritically
-GAMMA = .95
+GAMMA = .9
 DIE_PANELTY = 100
 WARMING_EPI = 10
 
@@ -59,8 +60,8 @@ Command_A = tf.argmax(tf.nn.softmax(Act_A), axis=-1)
 
 # PL = Act_R * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
 PL = (Act_R/REWARD_NORMA) * tf.nn.softmax_cross_entropy_with_logits(labels=Actions4Act_oh, logits=Act_A)
-# Opt = tf.train.RMSPropOptimizer(learning_rate=1E-4, momentum=.8, centered=True).minimize(PL)
-Opt = tf.train.MomentumOptimizer(learning_rate=1E-6, momentum=.8).minimize(PL)
+Opt = tf.train.RMSPropOptimizer(learning_rate=1E-4, momentum=.8, centered=True).minimize(PL)
+# Opt = tf.train.MomentumOptimizer(learning_rate=1E-6, momentum=.8).minimize(PL)
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
@@ -69,7 +70,7 @@ episode = 0
 while(1):
     episode += 1
     Rp = 0
-    R_space = 1E-9 # counting the space time during hit target
+    R_space = 1 # counting the space time during hit target
 # for episode in range(EPISODE):
     S = env.reset() #(210, 160, 3)
     GameScore = 0
@@ -105,19 +106,19 @@ while(1):
         Sp = S.copy()
         S, R, finish_flag, info = env.step(A)
         GameScore += R
-        R += .01 # also consider the live step as reward
+        # R += .01 # also consider the live step as reward
 
         Reward_cnt += R - Rp # advantage, Q
         
         if R == 0 :
             R_space += 1
         else:
-            R_space = 1E-9
+            R_space = 1
         pass
         
 
         # CuReward = CuReward * GAMMA + R
-        CuReward = CuReward * GAMMA + (Reward_cnt + R - REWARD_b)
+        CuReward = CuReward * GAMMA + (Reward_cnt/R_space + R - REWARD_b)
 
         # print('Reward:{}'.format(R)) # the reward will give this action will get how much scores. it's descreted.
         # print('Info:{}'.format(info['ale.lives'])) # info in space invader will give the lives of the current state
