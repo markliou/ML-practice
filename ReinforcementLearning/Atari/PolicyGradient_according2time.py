@@ -40,7 +40,7 @@ pass
 STEP_LIMIT = 1000
 EPISODE = 1000
 EPSILONE = .8
-REWARD_b = .1
+REWARD_b = 1.
 REWARD_NORMA = 500 # because the peak reward is close to 500, empiritically
 GAMMA = .9
 DIE_PANELTY = 100
@@ -109,7 +109,8 @@ while(1):
         # R += .01 # also consider the live step as reward
 
         Reward_cnt += (R/R_space) - Rp # advantage, Q
-        
+        Rp = (R/R_space)
+
         if R == 0 :
             R_space += 1
         else:
