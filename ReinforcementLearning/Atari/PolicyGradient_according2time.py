@@ -10,7 +10,7 @@ except ImportError:
 
 
 def conv2d(X, kernel_size = 3, stride_no = 1):
-    return tf.layers.conv2d(X, 32, 
+    return tf.layers.conv2d(X, 256, 
                                [kernel_size, kernel_size], 
                                [stride_no, stride_no], 
                                padding='SAME', 
@@ -29,7 +29,8 @@ def Q(S):
     conv6 = conv2d(conv5, stride_no=2) #(4, 3)
     
     f1 = tf.layers.flatten(conv6)
-    f2 = tf.layers.dense(f1, 32, activation=tf.nn.elu)
+    f2 = tf.layers.dense(f1, 512, activation=tf.nn.elu)
+    f2 = tf.layers.dense(f1, 1024, activation=tf.nn.elu)
     out = tf.layers.dense(f2, 6)
 
     return out
@@ -105,7 +106,7 @@ while(1):
         Sp = S.copy()
         S, R, finish_flag, info = env.step(A)
         GameScore += R
-        R += .01 # also consider the live step as reward
+        # R += .01 # also consider the live step as reward
 
         Reward_cnt += R - Rp # advantage, Q
         
