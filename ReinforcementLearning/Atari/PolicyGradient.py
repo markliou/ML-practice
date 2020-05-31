@@ -3,6 +3,12 @@ import tensorflow as tf
 import numpy as np
 import os
 
+try:
+    tf = tf.compat.v1
+    tf.disable_eager_execution()
+except ImportError:
+    pass
+
 def conv2d(X, kernel_size = 3, stride_no = 1):
     return tf.layers.conv2d(X, 128, 
                                [kernel_size, kernel_size], 
@@ -117,12 +123,6 @@ while(1):
         Reward_cnt += R - Rp # advantage, Q
         
         Rp = R
-        if Reward_cnt > REWARD_NORMA:
-            REWARD_NORMA = (Reward_cnt + REWARD_NORMA)/2
-        pass
-
-        # check the history of action
-        
 
         # CuReward = CuReward * GAMMA + R
         CuReward = CuReward * GAMMA + (Reward_cnt - REWARD_b)
@@ -133,6 +133,7 @@ while(1):
         if finish_flag or (Clives > info['ale.lives']):
             Clives = info['ale.lives']
             Rp -= DIE_PANELTY * Clives
+            CuReward += Rp
             # CuReward = np.clip(CuReward, 0, None)
             # print('This episode is finished ...')
             sess.run(Opt, 
