@@ -1,9 +1,10 @@
 import gym 
 import tensorflow as tf
 import numpy as np
+import os
 
 def conv2d(X, kernel_size = 3, stride_no = 1):
-    return tf.layers.conv2d(X, 32, 
+    return tf.layers.conv2d(X, 128, 
                                [kernel_size, kernel_size], 
                                [stride_no, stride_no], 
                                padding='SAME', 
@@ -14,16 +15,26 @@ pass
 
 def Q(S):
     S = (tf.cast(S,tf.float32)-128)/128.  #(210, 160, 3)
+    S = tf.layers.Dropout(.5)(S)
     conv1 = conv2d(S, stride_no=2) #(105, 80)
+    conv1 = tf.layers.Dropout(.5)(conv1)
     conv2 = conv2d(conv1, stride_no=2) #(53, 40)
+    conv2 = tf.layers.Dropout(.5)(conv2)
     conv3 = conv2d(conv2, stride_no=2) #(27, 20)
+    conv3 = tf.layers.Dropout(.5)(conv3)
     conv4 = conv2d(conv3, stride_no=2) #(14, 10)
+    conv4 = tf.layers.Dropout(.5)(conv4)
     conv5 = conv2d(conv4, stride_no=2) #(7, 5)
+    conv5 = tf.layers.Dropout(.5)(conv5)
     conv6 = conv2d(conv5, stride_no=2) #(4, 3)
+    conv6 = tf.layers.Dropout(.5)(conv6)
     
     f1 = tf.layers.flatten(conv6)
-    f2 = tf.layers.dense(f1, 32, activation=tf.nn.elu)
-    out = tf.layers.dense(f2, 6)
+    f1 = tf.layers.Dropout(.5)(f1)
+    f2 = tf.layers.dense(f1, 1024, activation=tf.nn.elu)
+    f2 = tf.layers.Dropout(.5)(f2)
+    f3 = tf.layers.dense(f2, 512, activation=tf.nn.elu)
+    out = tf.layers.dense(f3, 6)
 
     return out
 pass
@@ -32,13 +43,14 @@ pass
 STEP_LIMIT = 1000
 EPISODE = 1000
 EPSILONE = .8
-REWARD_b = .2
+REWARD_b = .1
 REWARD_NORMA = 500 # because the peak reward is close to 500, empiritically
-GAMMA = .95
+GAMMA = .99
 DIE_PANELTY = 50
 WARMING_EPI = 10
 
 env = gym.make('SpaceInvaders-v0') 
+os.system("echo > score_rec.txt") #clean the previoud recorders
 
 # Actor settings
 Opt_size = 32
@@ -52,8 +64,8 @@ Command_A = tf.argmax(tf.nn.softmax(Act_A), axis=-1)
 
 # PL = Act_R * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
 PL = (Act_R/REWARD_NORMA) * tf.nn.softmax_cross_entropy_with_logits(labels=Actions4Act_oh, logits=Act_A)
-# Opt = tf.train.RMSPropOptimizer(learning_rate=1E-4, momentum=.8, centered=True).minimize(PL)
-Opt = tf.train.MomentumOptimizer(learning_rate=1E-6, momentum=.8).minimize(PL)
+Opt = tf.train.RMSPropOptimizer(learning_rate=1E-3, momentum=.8, centered=True).minimize(PL)
+#Opt = tf.train.MomentumOptimizer(learning_rate=1E-6, momentum=.8).minimize(PL)
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
@@ -79,7 +91,7 @@ while(1):
     while(1):
         steps += 1
     # for step in range(STEP_LIMIT):
-        env.render() # show the windows. If you don't need to monitor the state, just comment this.
+        #env.render() # show the windows. If you don't need to monitor the state, just comment this.
         # print(S)
         
         # A = env.action_space.sample() # random sampling the actions
@@ -87,6 +99,7 @@ while(1):
 
         # sampling action from Q
         # epsilon greedy
+        # actions: [noop, fire, right, left, right fire, left fire]
         if Greedy_flag or (np.random.random() < .1):
             A = np.random.randint(6)
         else:
@@ -97,6 +110,9 @@ while(1):
         Sp = S.copy()
         S, R, finish_flag, info = env.step(A)
         GameScore += R
+        if A in [0, 2, 3]:
+            R += REWARD_b * .1 # give the reward for moving. This would be helpful for telling agent to avopod bullet
+        pass
         
         Reward_cnt += R - Rp # advantage, Q
         
@@ -127,6 +143,7 @@ while(1):
                           }
                 )
             if finish_flag:
+                os.system("echo {} >> score_rec.txt".format(GameScore))
                 break
             else:
                 continue
