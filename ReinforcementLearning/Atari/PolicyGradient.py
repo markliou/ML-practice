@@ -118,7 +118,7 @@ while(1):
         Sp = S.copy()
         S, R, finish_flag, info = env.step(A)
         GameScore += R
-        S = Sp * STATE_GAMMA + S  # keep the previoud state as input would be creating a RNN like condition
+        S = (Sp * STATE_GAMMA + S) * .5  # keep the previoud state as input would be creating a RNN like condition
         if A in [0]:
             R += (BEST_REC/BEST_STEPS) * .8 # give the reward for moving. This would be helpful for telling agent to avopod bullet
         elif A in [2,3]:
@@ -171,7 +171,7 @@ while(1):
                                     Actions4Act:np.array(A).reshape([-1])
                                     }
                             )
-        print('Action:{}  Loss:{} Epsilon:{} greedy:{} score:{}'.format(A, Loss, EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None), Greedy_flag, GameScore))
+        #print('Action:{}  Loss:{} Epsilon:{} greedy:{} score:{}'.format(A, Loss, EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None), Greedy_flag, GameScore))
 
     pass
     print("Epi:{}  Score:{}  Loss:{}".format(episode,Reward_cnt,Loss))
