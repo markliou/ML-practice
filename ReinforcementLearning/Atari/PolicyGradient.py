@@ -10,37 +10,37 @@ except ImportError:
     pass
 
 def conv2d(X, kernel_size = 3, stride_no = 1):
-    return tf.layers.conv2d(X, 128, 
+    return tf.layers.conv2d(X, 64, 
                                [kernel_size, kernel_size], 
                                [stride_no, stride_no], 
                                padding='SAME', 
                                kernel_initializer=tf.keras.initializers.glorot_normal,
-                               activation=tf.nn.elu
+                               activation=tf.nn.relu
                                )
 pass
 
 def Q(S):
     S = (tf.cast(S,tf.float32)-128)/128.  #(210, 160, 3)
     S = tf.layers.Dropout(.5)(S)
-    conv1 = conv2d(S, stride_no=2) #(105, 80)
-    conv1 = tf.layers.Dropout(.5)(conv1)
-    conv2 = conv2d(conv1, stride_no=2) #(53, 40)
-    conv2 = tf.layers.Dropout(.5)(conv2)
-    conv3 = conv2d(conv2, stride_no=2) #(27, 20)
-    conv3 = tf.layers.Dropout(.5)(conv3)
-    conv4 = conv2d(conv3, stride_no=2) #(14, 10)
-    conv4 = tf.layers.Dropout(.5)(conv4)
+    conv1 = conv2d(S, stride_no=1) #(105, 80)
+    #conv1 = tf.layers.Dropout(.5)(conv1)
+    conv2 = conv2d(conv1, stride_no=1) #(53, 40)
+    #conv2 = tf.layers.Dropout(.5)(conv2)
+    conv3 = conv2d(conv2, stride_no=1) #(27, 20)
+    #conv3 = tf.layers.Dropout(.5)(conv3)
+    conv4 = conv2d(conv3, stride_no=1) #(14, 10)
+    #conv4 = tf.layers.Dropout(.5)(conv4)
     conv5 = conv2d(conv4, stride_no=2) #(7, 5)
-    conv5 = tf.layers.Dropout(.5)(conv5)
+    #conv5 = tf.layers.Dropout(.5)(conv5)
     conv6 = conv2d(conv5, stride_no=2) #(4, 3)
-    conv6 = tf.layers.Dropout(.5)(conv6)
+    #conv6 = tf.layers.Dropout(.5)(conv6)
     
     f1 = tf.layers.flatten(conv6)
-    f1 = tf.layers.Dropout(.5)(f1)
-    f2 = tf.layers.dense(f1, 1024, activation=tf.nn.elu)
-    f2 = tf.layers.Dropout(.5)(f2)
-    f3 = tf.layers.dense(f2, 512, activation=tf.nn.elu)
-    out = tf.layers.dense(f3, 6)
+    #f1 = tf.layers.Dropout(.5)(f1)
+    f2 = tf.layers.dense(f1, 1024, activation=tf.nn.relu)
+    #f2 = tf.layers.Dropout(.5)(f2)
+    f3 = tf.layers.dense(f2, 512, activation=tf.nn.relu)
+    out = tf.layers.dense(f3, 4)
 
     return out
 pass
@@ -51,26 +51,29 @@ EPISODE = 1000
 EPSILONE = .8
 REWARD_b = .1
 REWARD_NORMA = 500 # because the peak reward is close to 500, empiritically
-GAMMA = .99
+GAMMA = .9
 DIE_PANELTY = 50
 WARMING_EPI = 10
+BEST_REC = 0
+BEST_STEPS = 1
+STATE_GAMMA = .9
 
 env = gym.make('SpaceInvaders-v0') 
 os.system("echo > score_rec.txt") #clean the previoud recorders
 
 # Actor settings
-Opt_size = 32
+#Opt_size = 32
 Act_S = tf.placeholder(tf.int8, [None, 210, 160, 3])
 Act_R = tf.placeholder(tf.float32, [None])
 Actions4Act = tf.placeholder(tf.uint8, [None])
-Actions4Act_oh = tf.one_hot(Actions4Act, 6) 
+Actions4Act_oh = tf.one_hot(Actions4Act, 4) 
 
 Act_A = Q(Act_S)
 Command_A = tf.argmax(tf.nn.softmax(Act_A), axis=-1)
 
 # PL = Act_R * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
 PL = (Act_R/REWARD_NORMA) * tf.nn.softmax_cross_entropy_with_logits(labels=Actions4Act_oh, logits=Act_A)
-Opt = tf.train.RMSPropOptimizer(learning_rate=1E-3, momentum=.8, centered=True).minimize(PL)
+Opt = tf.train.RMSPropOptimizer(learning_rate=1E-5, momentum=.0, centered=True).minimize(PL)
 #Opt = tf.train.MomentumOptimizer(learning_rate=1E-6, momentum=.8).minimize(PL)
 
 sess = tf.Session()
@@ -80,7 +83,6 @@ episode = 0
 while(1):
     episode += 1
     Rp = 0
-# for episode in range(EPISODE):
     S = env.reset() #(210, 160, 3)
     GameScore = 0
     Clives = 3
@@ -105,9 +107,9 @@ while(1):
 
         # sampling action from Q
         # epsilon greedy
-        # actions: [noop, fire, right, left, right fire, left fire]
+        # actions: [noop, fire, right, left, right fire, left fire] 
         if Greedy_flag or (np.random.random() < .1):
-            A = np.random.randint(6)
+            A = np.random.randint(4) # exlude right fire and left fire, such combo actions
         else:
             A = sess.run(Command_A, feed_dict={Act_S:np.array(S).reshape([1, 210, 160, 3])})[0]
         pass
@@ -116,8 +118,11 @@ while(1):
         Sp = S.copy()
         S, R, finish_flag, info = env.step(A)
         GameScore += R
-        if A in [0, 2, 3]:
-            R += REWARD_b * .1 # give the reward for moving. This would be helpful for telling agent to avopod bullet
+        S = Sp * STATE_GAMMA + S  # keep the previoud state as input would be creating a RNN like condition
+        if A in [0]:
+            R += (BEST_REC/BEST_STEPS) * .8 # give the reward for moving. This would be helpful for telling agent to avopod bullet
+        elif A in [2,3]:
+            R += (BEST_REC/BEST_STEPS) * .1
         pass
         
         Reward_cnt += R - Rp # advantage, Q
@@ -125,14 +130,15 @@ while(1):
         Rp = R
 
         # CuReward = CuReward * GAMMA + R
-        CuReward = CuReward * GAMMA + (Reward_cnt - REWARD_b)
+        # CuReward = CuReward * GAMMA + (Reward_cnt - REWARD_b)
+        CuReward = CuReward * GAMMA + (Reward_cnt - (BEST_REC/BEST_STEPS))
 
         # print('Reward:{}'.format(R)) # the reward will give this action will get how much scores. it's descreted.
         # print('Info:{}'.format(info['ale.lives'])) # info in space invader will give the lives of the current state
 
         if finish_flag or (Clives > info['ale.lives']):
             Clives = info['ale.lives']
-            Rp -= DIE_PANELTY * Clives
+            Rp -= (DIE_PANELTY - GameScore) * Clives
             CuReward += Rp
             # CuReward = np.clip(CuReward, 0, None)
             # print('This episode is finished ...')
@@ -144,6 +150,13 @@ while(1):
                           }
                 )
             if finish_flag:
+                if BEST_REC < GameScore:
+                    DIE_PANELTY = GameScore
+                    BEST_REC = GameScore
+                pass
+                if BEST_STEPS < steps:
+                    BEST_STEPS = steps
+                pass
                 os.system("echo {} >> score_rec.txt".format(GameScore))
                 break
             else:
