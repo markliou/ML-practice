@@ -9,8 +9,8 @@ try:
 except ImportError:
     pass
 
-def conv2d(X, kernel_size = 3, stride_no = 1):
-    return tf.layers.conv2d(X, 64, 
+def conv2d(X, channel_no = 64, kernel_size = 3, stride_no = 1):
+    return tf.layers.conv2d(X, channel_no, 
                                [kernel_size, kernel_size], 
                                [stride_no, stride_no], 
                                padding='SAME', 
@@ -22,18 +22,18 @@ pass
 def Q(S):
     S = (tf.cast(S,tf.float32)-128)/128.  #(210, 160, 3)
     #S = tf.layers.Dropout(.5)(S)
-    S = tf.layers.conv2d(S, 64, [1,1], [1,1], padding='SAME', activation=tf.nn.relu)
+    S = tf.layers.conv2d(S,16, [1,1], [1,1], padding='SAME', activation=tf.nn.relu)
     conv1 = conv2d(S, stride_no=2) #(105, 80)
     #conv1 = tf.layers.Dropout(.5)(conv1)
     conv2 = conv2d(conv1, stride_no=2) #(53, 40)
     #conv2 = tf.layers.Dropout(.5)(conv2)
     conv3 = conv2d(conv2, stride_no=2) #(27, 20)
     #conv3 = tf.layers.Dropout(.5)(conv3)
-    conv4 = conv2d(conv3, stride_no=2) #(14, 10)
+    conv4 = conv2d(conv3, 128, stride_no=2) #(14, 10)
     #conv4 = tf.layers.Dropout(.5)(conv4)
-    conv5 = conv2d(conv4, stride_no=2) #(7, 5)
+    conv5 = conv2d(conv4, 256, stride_no=2) #(7, 5)
     #conv5 = tf.layers.Dropout(.5)(conv5)
-    conv6 = conv2d(conv5, stride_no=2) #(4, 3)
+    conv6 = conv2d(conv5, 512, stride_no=2) #(4, 3)
     #conv6 = tf.layers.Dropout(.5)(conv6)
     
     f1 = tf.layers.flatten(conv6)
@@ -55,10 +55,10 @@ REWARD_NORMA = 500 # because the peak reward is close to 500, empiritically
 GAMMA = .5
 ALPHA = .9
 DIE_PANELTY = 0
-WARMING_EPI = 100
+WARMING_EPI = 0
 BEST_REC = 0.
 BEST_STEPS = 1.
-STATE_GAMMA = .8
+STATE_GAMMA = .9
 
 env = gym.make('SpaceInvaders-v0') 
 os.system("echo > score_rec.txt") #clean the previoud recorders
@@ -81,7 +81,7 @@ PL = (Act_R) * tf.nn.softmax_cross_entropy_with_logits(labels=Actions4Act_oh, lo
 
 optimizer = tf.train.RMSPropOptimizer(1E-4, .6, momentum=.9, centered=False)
 gvs = optimizer.compute_gradients(PL)
-capped_gvs = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gvs]
+capped_gvs = [(tf.clip_by_value(grad, -.5, .5), var) for grad, var in gvs]
 Opt = optimizer.apply_gradients(capped_gvs)
 
 sess = tf.Session()
@@ -116,7 +116,7 @@ while(1):
         # sampling action from Q
         # epsilon greedy
         # actions: [noop, fire, right, left, right fire, left fire] 
-        if Greedy_flag or (np.random.random() < .1):
+        if Greedy_flag or (np.random.random() < .2):
             A = np.random.randint(4) # exlude right fire and left fire, such combo actions
         else:
             A = sess.run(Command_A, feed_dict={Act_S:np.array(S).reshape([1, 210, 160, 3])})[0]
@@ -128,14 +128,14 @@ while(1):
         GameScore += R
         S = (Sp * STATE_GAMMA + S) * .5  # keep the previoud state as input would be creating a RNN like condition
         if A in [0]:
-            R += REWARD_b * 1.2 # give the reward for moving. This would be helpful for telling agent to avopod bullet
+            R += REWARD_b * .8 # give the reward for moving. This would be helpful for telling agent to avopod bullet
         elif A in [2,3]:
-            R += REWARD_b * 1.5
+            R += REWARD_b * 1.
         pass
         
         # advantage, Q
         # Reward_cnt = GAMMA * pow((R - Rp),2)  # advantage, Q
-        Reward_cnt = GAMMA * (Rp - R)
+        Reward_cnt = GAMMA * (Rp - R)  
         
         Rp = R 
         #print(R)
@@ -158,12 +158,12 @@ while(1):
             # CuReward = np.clip(CuReward, 0, None)
             # print('This episode is finished ...')
             Loss, _ = sess.run([PL, Opt], 
-                feed_dict={
-                          Act_S:np.array(Sp).reshape([-1, 210, 160, 3]),
-                          Act_R:np.array(CuReward).reshape([-1]),
-                          Actions4Act:np.array(0).reshape([-1])
-                          }
-                )
+                               feed_dict={
+                                          Act_S:np.array(Sp).reshape([-1, 210, 160, 3]),
+                                          Act_R:np.array(CuReward).reshape([-1]),
+                                          Actions4Act:np.array(0).reshape([-1])
+                                         }
+                               )             
             if finish_flag:
                 if BEST_REC < GameScore:
                     BEST_REC = GameScore 
