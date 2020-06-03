@@ -21,7 +21,8 @@ pass
 
 def Q(S):
     S = (tf.cast(S,tf.float32)-128)/128.  #(210, 160, 3)
-    S = tf.layers.Dropout(.5)(S)
+    #S = tf.layers.Dropout(.5)(S)
+    S = tf.layers.conv2d(S, 64, [1,1], [1,1], padding='SAME', activation=tf.nn.relu)
     conv1 = conv2d(S, stride_no=2) #(105, 80)
     #conv1 = tf.layers.Dropout(.5)(conv1)
     conv2 = conv2d(conv1, stride_no=2) #(53, 40)
@@ -51,13 +52,13 @@ EPISODE = 1000
 EPSILONE = .8
 REWARD_b = .0
 REWARD_NORMA = 500 # because the peak reward is close to 500, empiritically
-GAMMA = .9
+GAMMA = .5
 ALPHA = .9
 DIE_PANELTY = 0
-WARMING_EPI = 0
+WARMING_EPI = 100
 BEST_REC = 0.
 BEST_STEPS = 1.
-STATE_GAMMA = .9
+STATE_GAMMA = .8
 
 env = gym.make('SpaceInvaders-v0') 
 os.system("echo > score_rec.txt") #clean the previoud recorders
@@ -74,8 +75,14 @@ Command_A = tf.argmax(tf.nn.softmax(Act_A), axis=-1)
 
 # PL = Act_R * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
 PL = (Act_R) * tf.nn.softmax_cross_entropy_with_logits(labels=Actions4Act_oh, logits=Act_A)
-Opt = tf.train.RMSPropOptimizer(learning_rate=1E-6, momentum=.9, centered=True).minimize(PL)
+
+#Opt = tf.train.RMSPropOptimizer(1E-4, .6, momentum=.9, centered=False).minimize(PL)
 #Opt = tf.train.MomentumOptimizer(learning_rate=1E-6, momentum=.8).minimize(PL)
+
+optimizer = tf.train.RMSPropOptimizer(1E-4, .6, momentum=.9, centered=False)
+gvs = optimizer.compute_gradients(PL)
+capped_gvs = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gvs]
+Opt = optimizer.apply_gradients(capped_gvs)
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
@@ -135,6 +142,7 @@ while(1):
 
         # CuReward = CuReward * GAMMA + R
         CuReward = ALPHA * CuReward + Reward_cnt
+        # CuReward += Reward_cnt
         # CuReward = CuReward * GAMMA + Reward_cnt
         # CuReward = CuReward * GAMMA + (Reward_cnt - (BEST_REC/BEST_STEPS))
         #print(CuReward)
@@ -144,15 +152,16 @@ while(1):
 
         if finish_flag or (Clives > info['ale.lives']):
             Clives = info['ale.lives']
-            Rp -= DIE_PANELTY 
-            CuReward += Rp
+            # Rp -= DIE_PANELTY - CuReward 
+            # CuReward += Rp
+            CuReward = 0
             # CuReward = np.clip(CuReward, 0, None)
             # print('This episode is finished ...')
-            sess.run(Opt, 
+            Loss, _ = sess.run([PL, Opt], 
                 feed_dict={
                           Act_S:np.array(Sp).reshape([-1, 210, 160, 3]),
                           Act_R:np.array(CuReward).reshape([-1]),
-                          Actions4Act:np.array(A).reshape([-1])
+                          Actions4Act:np.array(0).reshape([-1])
                           }
                 )
             if finish_flag:
@@ -166,7 +175,7 @@ while(1):
                     REWARD_b = (GameScore/steps)
                 pass 
                 if DIE_PANELTY < CuReward:
-                    DIE_PANELTY = CuReward * .5 
+                    DIE_PANELTY = CuReward * .8 
                     #print(DIE_PANELTY)
                 pass
                 os.system("echo {} >> score_rec.txt".format(GameScore))
