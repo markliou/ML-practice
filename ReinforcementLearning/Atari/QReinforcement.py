@@ -53,7 +53,7 @@ EPSILONE = .8
 REWARD_b = .0
 REWARD_NORMA = 500 # because the peak reward is close to 500, empiritically
 GAMMA = .5
-ALPHA = .9
+ALPHA = .6
 DIE_PANELTY = 0
 WARMING_EPI = 0
 BEST_REC = 0.
@@ -66,17 +66,18 @@ os.system("echo > score_rec.txt") #clean the previoud recorders
 # Actor settings
 Opt_size = 1 # skip frames
 Act_S = tf.placeholder(tf.int8, [None, 210, 160, 3])
+Act_Sp = tf.placeholder(tf.int8, [None, 210, 160, 3])
 Act_R = tf.placeholder(tf.float32, [None])
 Actions4Act = tf.placeholder(tf.uint8, [None])
 Actions4Act_oh = tf.one_hot(Actions4Act, 4) 
 
 Act_A = Q(Act_S)
-Command_A = tf.argmax(tf.nn.softmax(Act_A), axis=-1)
+Command_A = tf.argmax(Act_A, axis=-1)
 
-# PL = Act_R * -tf.log(tf.reduce_sum(tf.nn.softmax(Act_A) * Actions4Act_oh)+1E-9)
-PL = (Act_R) * tf.nn.softmax_cross_entropy_with_logits(labels=Actions4Act_oh, logits=Act_A)
+Act_Ap = Q(Act_Sp)
+PL = tf.pow((Act_R - tf.reduce_max(Act_Ap) - tf.reduce_max(Act_A)), 2) #Q 
 
-Opt = tf.train.RMSPropOptimizer(1E-4, momentum=.9, centered=True).minimize(PL)
+Opt = tf.train.RMSPropOptimizer(1E-3, momentum=.9, centered=True).minimize(PL)
 #Opt = tf.train.MomentumOptimizer(learning_rate=1E-6, momentum=.8).minimize(PL)
 
 #optimizer = tf.train.RMSPropOptimizer(1E-4, .6, momentum=.9, centered=False)
@@ -136,15 +137,15 @@ while(1):
         
         # advantage
         #Reward_cnt = GAMMA * pow((R - Rp),2)
-        Reward_cnt = GAMMA * (R - Rp)   
+        #Reward_cnt = GAMMA * R - Rp   
         #Reward_cnt = GAMMA * np.clip(R - Rp, 0, np.inf)
         #print(Reward_cnt)
 
-        Rp = R 
+        #Rp = Reward_cnt 
         #print(R)
 
         # CuReward = CuReward * GAMMA + R
-        CuReward = ALPHA * CuReward + Reward_cnt
+        CuReward = ALPHA * CuReward + R
         # CuReward = 1 + Reward_cnt # normalized reward with game score
         # CuReward += Reward_cnt
         # CuReward = CuReward * GAMMA + Reward_cnt
@@ -156,14 +157,15 @@ while(1):
 
         if finish_flag or (Clives > info['ale.lives']):
             Clives = info['ale.lives']
-            CuReward = ALPHA * CuReward - DIE_PANELTY 
+            # CuReward = ALPHA * CuReward - DIE_PANELTY 
             #CuReward = -1
             # CuReward = np.clip(CuReward, 0, None)
             # print('This episode is finished ...')
             A = sess.run(Command_A, feed_dict={Act_S:np.array(Sp).reshape([1, 210, 160, 3])})[0]
             Loss, _ = sess.run([PL, Opt], 
                                feed_dict={
-                                          Act_S:np.array(Sp).reshape([-1, 210, 160, 3]),
+                                          Act_S:np.array(S).reshape([-1, 210, 160, 3]),
+                                          Act_Sp:np.array(Sp).reshape([-1, 210, 160, 3]),
                                           Act_R:np.array(CuReward).reshape([-1]),
                                           Actions4Act:np.array(A).reshape([-1]) 
                                          }
@@ -195,7 +197,8 @@ while(1):
         if steps % Opt_size ==0:
             Loss, _ = sess.run([PL, Opt], 
                                 feed_dict={
-                                        Act_S:np.array(Sp).reshape([-1, 210, 160, 3]),
+                                        Act_S:np.array(S).reshape([-1, 210, 160, 3]),
+                                        Act_Sp:np.array(Sp).reshape([-1, 210, 160, 3]),
                                         Act_R:np.array(CuReward).reshape([-1]),
                                         Actions4Act:np.array(A).reshape([-1])
                                         }
