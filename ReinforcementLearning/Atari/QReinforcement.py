@@ -31,9 +31,9 @@ def Q(S):
     #conv3 = tf.layers.Dropout(.5)(conv3)
     conv4 = conv2d(conv3, 128, stride_no=2) #(14, 10)
     #conv4 = tf.layers.Dropout(.5)(conv4)
-    conv5 = conv2d(conv4, 256, stride_no=2) #(7, 5)
+    conv5 = conv2d(conv4, 256, stride_no=1) #(7, 5)
     #conv5 = tf.layers.Dropout(.5)(conv5)
-    conv6 = conv2d(conv5, 512, stride_no=2) #(4, 3)
+    conv6 = conv2d(conv5, 512, stride_no=1) #(4, 3)
     #conv6 = tf.layers.Dropout(.5)(conv6)
     
     f1 = tf.layers.flatten(conv6)
@@ -58,13 +58,14 @@ DIE_PANELTY = 0
 WARMING_EPI = 0
 BEST_REC = 0.
 BEST_STEPS = 1.
-STATE_GAMMA = .8
+STATE_GAMMA = .9
 
 env = gym.make('SpaceInvaders-v0') 
 os.system("echo > score_rec.txt") #clean the previoud recorders
 
 # Actor settings
-Opt_size = 1 # skip frames
+Opt_size = 4 # skip frames
+OPT_FLAG = False
 Act_S = tf.placeholder(tf.int8, [None, 210, 160, 3])
 Act_Sp = tf.placeholder(tf.int8, [None, 210, 160, 3])
 Act_R = tf.placeholder(tf.float32, [None])
@@ -75,9 +76,9 @@ Act_A = Q(Act_S)
 Command_A = tf.argmax(Act_A, axis=-1)
 
 Act_Ap = Q(Act_Sp)
-PL = tf.pow((Act_R - tf.reduce_max(Act_Ap) - tf.reduce_max(Act_A)), 2) #Q 
+PL = tf.pow((Act_R + tf.reduce_max(Act_Ap * Actions4Act_oh) - tf.reduce_max(Act_A)), 2) #Q 
 
-Opt = tf.train.RMSPropOptimizer(1E-3, momentum=.9, centered=True).minimize(PL)
+Opt = tf.train.RMSPropOptimizer(1E-4, momentum=.0, centered=True).minimize(PL)
 #Opt = tf.train.MomentumOptimizer(learning_rate=1E-6, momentum=.8).minimize(PL)
 
 #optimizer = tf.train.RMSPropOptimizer(1E-4, .6, momentum=.9, centered=False)
@@ -98,6 +99,7 @@ while(1):
     Reward_cnt = 0.
     CuReward = 0.
     R_list, S_list = [],[]
+    Shooting_S = []
     
     steps = 0
     if (np.random.random() >= EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None)) or (WARMING_EPI < episode) :
@@ -127,14 +129,21 @@ while(1):
         Sp = S.copy()
         S, R, finish_flag, info = env.step(A)
         GameScore += R
-        S = (Sp * STATE_GAMMA + S) * .5  # keep the previoud state as input would be creating a RNN like condition
+        S = Sp * STATE_GAMMA * .8 + S * .2  # keep the previoud state as input would be creating a RNN like condition
+       
+        # handling the reward and actions
+        if R > 0:
+            OPT_FLAG = True
+        pass
         
-        #if A in [0]:
-        #    R += REWARD_b * .5 # give the reward for moving. This would be helpful for telling agent to avopod bullet
-        #elif A in [2,3]:
-        #    R += REWARD_b * .1
-        #pass
-        
+        if A in [0]:
+            R += REWARD_b * .5 # give the reward for moving. This would be helpful for telling agent to avopod bullet
+        elif A in [2,3]:
+            R += REWARD_b * .1
+        elif A in [1]:
+            Shooting_S.append([Sp, S]) # s, s'. Treat it as MC and memory replay hybrid
+        pass
+
         # advantage
         #Reward_cnt = GAMMA * pow((R - Rp),2)
         #Reward_cnt = GAMMA * R - Rp   
@@ -145,7 +154,8 @@ while(1):
         #print(R)
 
         # CuReward = CuReward * GAMMA + R
-        CuReward = ALPHA * CuReward + R
+        # CuReward = ALPHA * CuReward + R
+        CuReward = R 
         # CuReward = 1 + Reward_cnt # normalized reward with game score
         # CuReward += Reward_cnt
         # CuReward = CuReward * GAMMA + Reward_cnt
@@ -194,21 +204,33 @@ while(1):
             pass
         pass 
         # TD
-        if steps % Opt_size ==0:
-            Loss, _ = sess.run([PL, Opt], 
+        if  OPT_FLAG: # shooting MC
+            SN = len(Shooting_S)
+            SR = R/SN
+            for Si, Spi in Shooting_S :
+                Loss, _ = sess.run([PL, Opt], 
+                                    feed_dict={
+                                            Act_S:np.array(S).reshape([-1, 210, 160, 3]),
+                                            Act_Sp:np.array(Sp).reshape([-1, 210, 160, 3]),
+                                            Act_R:np.array(SR).reshape([-1]),
+                                            Actions4Act:np.array(1).reshape([-1])
+                                            }
+                                   )
+            pass
+            OPT_FLAG = False
+            Shooting_S = []
+        elif A in [0, 2, 3]:
+            Loss, _ = sess.run([PL, Opt],
                                 feed_dict={
                                         Act_S:np.array(S).reshape([-1, 210, 160, 3]),
                                         Act_Sp:np.array(Sp).reshape([-1, 210, 160, 3]),
                                         Act_R:np.array(CuReward).reshape([-1]),
                                         Actions4Act:np.array(A).reshape([-1])
-                                        }
-                                )
-        
-        
-            #print('Action:{}  Loss:{} Epsilon:{} greedy:{} score:{}'.format(A, Loss, EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None), Greedy_flag, GameScore))
+                                          }
+                               )
         pass
+        #print('Action:{}  Loss:{} Epsilon:{} greedy:{} score:{}'.format(A, Loss, EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None), Greedy_flag, GameScore))
     pass
     print("Epi:{}  Score:{}  Loss:{}  Reward:{}".format(episode,GameScore,Loss,CuReward))
-
 
 pass
