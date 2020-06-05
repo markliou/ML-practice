@@ -204,7 +204,7 @@ while(1):
             pass
         pass 
         # TD
-        if  OPT_FLAG: # shooting MC
+        if  OPT_FLAG and len(Shooting_S) > 0: # shooting MC
             SN = len(Shooting_S)
             SR = R/SN
             for Si, Spi in Shooting_S :
