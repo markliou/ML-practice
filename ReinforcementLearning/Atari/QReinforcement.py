@@ -58,13 +58,13 @@ DIE_PANELTY = 0
 WARMING_EPI = 0
 BEST_REC = 0.
 BEST_STEPS = 1.
-STATE_GAMMA = .9
+STATE_GAMMA = .6
 
 env = gym.make('SpaceInvaders-v0') 
 os.system("echo > score_rec.txt") #clean the previoud recorders
 
 # Actor settings
-Opt_size = 4 # skip frames
+Opt_size = 16 # skip frames
 OPT_FLAG = False
 Act_S = tf.placeholder(tf.int8, [None, 210, 160, 3])
 Act_Sp = tf.placeholder(tf.int8, [None, 210, 160, 3])
@@ -76,15 +76,15 @@ Act_A = Q(Act_S)
 Command_A = tf.argmax(Act_A, axis=-1)
 
 Act_Ap = Q(Act_Sp)
-PL = tf.pow((Act_R + tf.reduce_max(Act_Ap * Actions4Act_oh) - tf.reduce_max(Act_A)), 2) #Q 
+PL = tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2) #Q 
 
-Opt = tf.train.RMSPropOptimizer(1E-4, momentum=.0, centered=True).minimize(PL)
+#Opt = tf.train.RMSPropOptimizer(1E-4, momentum=.0, centered=True).minimize(PL)
 #Opt = tf.train.MomentumOptimizer(learning_rate=1E-6, momentum=.8).minimize(PL)
 
-#optimizer = tf.train.RMSPropOptimizer(1E-4, .6, momentum=.9, centered=False)
-#gr, va = zip(*optimizer.compute_gradients(PL))
-#gr = [None if gr is None else tf.clip_by_norm(grad, 15.) for grad in gr]
-#Opt = optimizer.apply_gradients(zip(gr, va))
+optimizer = tf.train.RMSPropOptimizer(1E-3, .6, momentum=.0, centered=True)
+gr, va = zip(*optimizer.compute_gradients(PL))
+gr = [None if gr is None else tf.clip_by_norm(grad, 5.) for grad in gr]
+Opt = optimizer.apply_gradients(zip(gr, va))
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
@@ -129,7 +129,7 @@ while(1):
         Sp = S.copy()
         S, R, finish_flag, info = env.step(A)
         GameScore += R
-        S = Sp * STATE_GAMMA * .8 + S * .2  # keep the previoud state as input would be creating a RNN like condition
+        S = Sp * STATE_GAMMA * .5 + S * .5  # keep the previoud state as input would be creating a RNN like condition
        
         # handling the reward and actions
         if R > 0:
@@ -168,7 +168,7 @@ while(1):
         if finish_flag or (Clives > info['ale.lives']):
             Clives = info['ale.lives']
             # CuReward = ALPHA * CuReward - DIE_PANELTY 
-            #CuReward = -1
+            CuReward = -1
             # CuReward = np.clip(CuReward, 0, None)
             # print('This episode is finished ...')
             A = sess.run(Command_A, feed_dict={Act_S:np.array(Sp).reshape([1, 210, 160, 3])})[0]
@@ -187,12 +187,12 @@ while(1):
                 if BEST_STEPS < steps:
                     BEST_STEPS = steps 
                 pass
-                #if REWARD_b < (GameScore/steps) :
-                    #REWARD_b = (GameScore/steps)
-                #pass
-                if REWARD_b < (CuReward/steps):
-                    REWARD_b = CuReward/steps
+                if REWARD_b < (GameScore/steps) :
+                    REWARD_b = (GameScore/steps)
                 pass
+                #if REWARD_b < (CuReward/steps):
+                #    REWARD_b = CuReward/steps
+                #pass
                 if DIE_PANELTY < CuReward:
                     DIE_PANELTY = CuReward * .8 
                     #print(DIE_PANELTY)
@@ -206,8 +206,10 @@ while(1):
         # TD
         if  OPT_FLAG and len(Shooting_S) > 0: # shooting MC
             SN = len(Shooting_S)
-            SR = R/SN
-            for Si, Spi in Shooting_S :
+            #print('SN {}'.format(SN))
+            SR = (R * 10 )/SN
+            #print('SR {}'.format(SR))
+            for Si, Spi in Shooting_S + Shooting_S:
                 Loss, _ = sess.run([PL, Opt], 
                                     feed_dict={
                                             Act_S:np.array(S).reshape([-1, 210, 160, 3]),
@@ -219,7 +221,7 @@ while(1):
             pass
             OPT_FLAG = False
             Shooting_S = []
-        elif A in [0, 2, 3]:
+        elif A in [0, 2, 3] and steps % Opt_size == 0:
             Loss, _ = sess.run([PL, Opt],
                                 feed_dict={
                                         Act_S:np.array(S).reshape([-1, 210, 160, 3]),
