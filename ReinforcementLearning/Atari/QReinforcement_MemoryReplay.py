@@ -220,9 +220,9 @@ while(1):
                                             Actions4Act:np.array(1).reshape([-1])
                                             }
                                    )
-                #if (np.random.random() > .8) and (len(REPLAY_BUFFER) < 1E7): # push information into replay buffer
-                 #   REPLAY_BUFFER.append([Spi, 1, Si, SR])
-                #pass
+                if (np.random.random() > .2) and (len(REPLAY_BUFFER) < 1E5): # push information into replay buffer
+                    REPLAY_BUFFER.append([Spi, 1, Si, SR])
+                pass
                 
             pass
             OPT_FLAG = False
@@ -236,32 +236,32 @@ while(1):
                                         Actions4Act:np.array(A).reshape([-1])
                                           }
                                )
-            #if (np.random.random() > .5): # push information into replay buffer
-            #    REPLAY_BUFFER.append([Sp, A, S, CuReward])
-            #pass
+            if (np.random.random() > .2): # push information into replay buffer
+                REPLAY_BUFFER.append([Sp, A, S, CuReward])
+            pass
         pass
 
         #print('Action:{}  Loss:{} Epsilon:{} greedy:{} score:{}'.format(A, Loss, EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None), Greedy_flag, GameScore))
     pass
 
     # memory replay
-    #random.shuffle(REPLAY_BUFFER)
-    #for m in REPLAY_BUFFER:
-    #    Spm, Am, Sm, SRm = m
-    #    _ = sess.run([PL, Opt],
-    #            feed_dict={
-    #                Act_S:np.array(Sm).reshape([-1, 210, 160, 3]),
-    #                Act_Sp:np.array(Spm).reshape([-1, 210, 160, 3]),
-    #                Act_R:np.array(SRm).reshape([-1]),
-    #                Actions4Act:np.array(Am).reshape([-1])
-    #                      }
-    #            )
-    #pass
+    random.shuffle(REPLAY_BUFFER)
+    for m in REPLAY_BUFFER:
+        Spm, Am, Sm, SRm = m
+        _ = sess.run([PL, Opt],
+                feed_dict={
+                    Act_S:np.array(Sm).reshape([-1, 210, 160, 3]),
+                    Act_Sp:np.array(Spm).reshape([-1, 210, 160, 3]),
+                    Act_R:np.array(SRm).reshape([-1]),
+                    Actions4Act:np.array(Am).reshape([-1])
+                          }
+                )
+    pass
 
     # random keep memory
-    #if (len(REPLAY_BUFFER) > 1E5):
-    #    REPLAY_BUFFER = REPLAY_BUFFER[0:int(np.random.random() * len(REPLAY_BUFFER))]
-    #pass
+    if (len(REPLAY_BUFFER) > 1E5):
+        REPLAY_BUFFER = REPLAY_BUFFER[0:int(len(REPLAY_BUFFER)*.2)]
+    pass
 
     print("Epi:{}  Score:{}  Loss:{}  Reward:{}".format(episode,GameScore,Loss,CuReward))
 
