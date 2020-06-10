@@ -59,11 +59,11 @@ DIE_PANELTY = 0
 WARMING_EPI = 0
 BEST_REC = 0.
 BEST_STEPS = 1.
-STATE_GAMMA = .6
+STATE_GAMMA = .2
 REPLAY_BUFFER = []
 
 env = gym.make('SpaceInvaders-v0') 
-os.system("echo > score_rec2.txt") #clean the previoud recorders
+os.system("echo > score_rec.txt") #clean the previoud recorders
 
 # Actor settings
 Opt_size = 16 # skip frames
@@ -83,7 +83,7 @@ PL = tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_o
 #Opt = tf.train.RMSPropOptimizer(1E-4, momentum=.0, centered=True).minimize(PL)
 #Opt = tf.train.MomentumOptimizer(learning_rate=1E-6, momentum=.8).minimize(PL)
 
-optimizer = tf.train.RMSPropOptimizer(1E-3, .6, momentum=.0, centered=True)
+optimizer = tf.train.RMSPropOptimizer(1E-4, .6, momentum=.0, centered=True)
 gr, va = zip(*optimizer.compute_gradients(PL))
 gr = [None if gr is None else tf.clip_by_norm(grad, 5.) for grad in gr]
 Opt = optimizer.apply_gradients(zip(gr, va))
@@ -142,9 +142,11 @@ while(1):
             R += REWARD_b * .5 # give the reward for moving. This would be helpful for telling agent to avopod bullet
         elif A in [2,3]:
             R += REWARD_b * .1
-        elif A in [1]:
-            Shooting_S.append([Sp, S]) # s, s'. Treat it as MC and memory replay hybrid
+        #elif A in [1]:
+        #    Shooting_S.append([Sp, S]) # s, s'. Treat it as MC and memory replay hybrid
         pass
+
+        Shooting_S.append([Sp, A, S]) # s, s'. Treat it as MC and memory replay hybrid
 
         # advantage
         #Reward_cnt = GAMMA * pow((R - Rp),2)
@@ -182,6 +184,21 @@ while(1):
                                           Actions4Act:np.array(A).reshape([-1]) 
                                          }
                                )
+            
+            if len(Shooting_S) > 0: # ponishing the shutting state because of die
+                for Si, Ai, Spi in Shooting_S:
+                    Loss, _ = sess.run([PL, Opt],
+                            feed_dict={
+                                Act_S:np.array(Si).reshape([-1, 210, 160, 3]),
+                                Act_Sp:np.array(Spi).reshape([-1, 210, 160, 3]),
+                                Act_R:np.array(-10).reshape([-1]),
+                                Actions4Act:np.array(Ai).reshape([-1])
+                                }
+                            )
+                    Shooting_S = []
+                pass
+            pass
+            
             if finish_flag:
                 if BEST_REC < GameScore:
                     BEST_REC = GameScore 
@@ -206,18 +223,18 @@ while(1):
             pass
         pass 
         # TD
-        if  OPT_FLAG and len(Shooting_S) > 0: # shooting MC
+        if  (OPT_FLAG and len(Shooting_S) > 0): # shooting MC
             SN = len(Shooting_S)
             #print('SN {}'.format(SN))
             SR = (R * 10 )/SN
             #print('SR {}'.format(SR))
-            for Si, Spi in Shooting_S:
+            for Si, Ai, Spi in Shooting_S:
                 Loss, _ = sess.run([PL, Opt], 
                                     feed_dict={
                                             Act_S:np.array(Si).reshape([-1, 210, 160, 3]),
                                             Act_Sp:np.array(Spi).reshape([-1, 210, 160, 3]),
                                             Act_R:np.array(SR).reshape([-1]),
-                                            Actions4Act:np.array(1).reshape([-1])
+                                            Actions4Act:np.array(Ai).reshape([-1])
                                             }
                                    )
                 #if (np.random.random() > .8) and (len(REPLAY_BUFFER) < 1E7): # push information into replay buffer
