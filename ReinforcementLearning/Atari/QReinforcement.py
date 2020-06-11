@@ -131,7 +131,7 @@ while(1):
         Sp = S.copy()
         S, R, finish_flag, info = env.step(A)
         GameScore += R
-        S = Sp * STATE_GAMMA * .5 + S * .5  # keep the previoud state as input would be creating a RNN like condition
+        S = np.clip(Sp * STATE_GAMMA + S, 0, 256)  # keep the previoud state as input would be creating a RNN like condition
        
         # handling the reward and actions
         if R > 0:
@@ -226,7 +226,7 @@ while(1):
         if  (OPT_FLAG and len(Shooting_S) > 0): # shooting MC
             SN = len(Shooting_S)
             #print('SN {}'.format(SN))
-            SR = (R * 10 )/SN
+            SR = (R * 50 )/SN
             #print('SR {}'.format(SR))
             for Si, Ai, Spi in Shooting_S:
                 Loss, _ = sess.run([PL, Opt], 

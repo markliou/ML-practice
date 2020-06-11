@@ -61,7 +61,7 @@ BEST_REC = 0.
 BEST_STEPS = 1.
 STATE_GAMMA = .2
 REPLAY_BUFFER = []
-REPLAY_BUFFER_SIZE = 1E7
+REPLAY_BUFFER_SIZE = 5E6
 
 env = gym.make('SpaceInvaders-v0') 
 os.system("echo > score_rec2.txt") #clean the previoud recorders
@@ -270,7 +270,7 @@ while(1):
 
     # random keep memory
     if (len(REPLAY_BUFFER) >= REPLAY_BUFFER_SIZE):
-        REPLAY_BUFFER = REPLAY_BUFFER[0:int(len(REPLAY_BUFFER)*.2)]
+        REPLAY_BUFFER = REPLAY_BUFFER[0:int(len(REPLAY_BUFFER)*.2)].copy()
     pass
 
     print("Epi:{}  Score:{}  Loss:{}  Reward:{}".format(episode,GameScore,Loss,CuReward))
