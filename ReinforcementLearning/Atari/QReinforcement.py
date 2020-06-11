@@ -59,8 +59,9 @@ DIE_PANELTY = 0
 WARMING_EPI = 0
 BEST_REC = 0.
 BEST_STEPS = 1.
-STATE_GAMMA = .2
+STATE_GAMMA = .5
 REPLAY_BUFFER = []
+Loss = 0
 
 env = gym.make('SpaceInvaders-v0') 
 os.system("echo > score_rec.txt") #clean the previoud recorders
@@ -142,11 +143,11 @@ while(1):
             R += REWARD_b * .5 # give the reward for moving. This would be helpful for telling agent to avopod bullet
         elif A in [2,3]:
             R += REWARD_b * .1
-        #elif A in [1]:
-        #    Shooting_S.append([Sp, S]) # s, s'. Treat it as MC and memory replay hybrid
+        elif A in [1]:
+            Shooting_S.append([Sp, A, S]) # s, s'. Treat it as MC and memory replay hybrid
         pass
 
-        Shooting_S.append([Sp, A, S]) # s, s'. Treat it as MC and memory replay hybrid
+        #Shooting_S.append([Sp, A, S]) # s, s'. Treat it as MC and memory replay hybrid
 
         # advantage
         #Reward_cnt = GAMMA * pow((R - Rp),2)
@@ -223,25 +224,26 @@ while(1):
             pass
         pass 
         # TD
+        #Loss = np.nan
         if  (OPT_FLAG and len(Shooting_S) > 0): # shooting MC
             SN = len(Shooting_S)
             #print('SN {}'.format(SN))
             SR = (R * 50 )/SN
             #print('SR {}'.format(SR))
-            for Si, Ai, Spi in Shooting_S:
-                Loss, _ = sess.run([PL, Opt], 
-                                    feed_dict={
-                                            Act_S:np.array(Si).reshape([-1, 210, 160, 3]),
-                                            Act_Sp:np.array(Spi).reshape([-1, 210, 160, 3]),
-                                            Act_R:np.array(SR).reshape([-1]),
-                                            Actions4Act:np.array(Ai).reshape([-1])
-                                            }
-                                   )
-                #if (np.random.random() > .8) and (len(REPLAY_BUFFER) < 1E7): # push information into replay buffer
-                 #   REPLAY_BUFFER.append([Spi, 1, Si, SR])
-                #pass
+            #for Si, Ai, Spi in Shooting_S:
+            #    Loss, _ = sess.run([PL, Opt], 
+            #                        feed_dict={
+            #                                Act_S:np.array(Si).reshape([-1, 210, 160, 3]),
+            #                                Act_Sp:np.array(Spi).reshape([-1, 210, 160, 3]),
+            #                                Act_R:np.array(SR).reshape([-1]),
+            #                                Actions4Act:np.array(Ai).reshape([-1])
+            #                                }
+            #                       )
+            #    #if (np.random.random() > .8) and (len(REPLAY_BUFFER) < 1E7): # push information into replay buffer
+            #     #   REPLAY_BUFFER.append([Spi, 1, Si, SR])
+            #    #pass
                 
-            pass
+            #pass
             OPT_FLAG = False
             Shooting_S = []
         elif A in [0, 2, 3] and steps % Opt_size == 0:

@@ -61,7 +61,7 @@ BEST_REC = 0.
 BEST_STEPS = 1.
 STATE_GAMMA = .2
 REPLAY_BUFFER = []
-REPLAY_BUFFER_SIZE = 5E6
+REPLAY_BUFFER_SIZE = 1E4
 
 env = gym.make('SpaceInvaders-v0') 
 os.system("echo > score_rec2.txt") #clean the previoud recorders
@@ -227,7 +227,7 @@ while(1):
                 
             pass
             OPT_FLAG = False
-            Shooting_S = []
+            Shooting_S.clear()
         elif A in [0, 2, 3] and steps % Opt_size == 0:
             Loss, _ = sess.run([PL, Opt],
                                 feed_dict={
@@ -247,7 +247,8 @@ while(1):
 
     # memory replay
     random.shuffle(REPLAY_BUFFER)
-    Spmb, Amb, Smb, SRmb = [], [] ,[] ,[] # give a batch
+    # give a batch
+    Spmb, Amb, Smb, SRmb = [], [], [], []
     for m in REPLAY_BUFFER[0:int(len(REPLAY_BUFFER)*.8)]:
         if len(Amb) < 32: # batch size 
             Spm, Am, Sm, SRm = m
@@ -264,13 +265,24 @@ while(1):
                         Actions4Act:np.array(Amb).reshape([-1])
                               }
                         )
-            Spmb, Amb, Smb, SRmb = [], [] ,[] ,[]
+            Spmb.clear()
+            Amb.clear()
+            Smb.clear()
+            SRmb.clear()
         pass
     pass
+    Spmb.clear()
+    Amb.clear()
+    Smb.clear()
+    SRmb.clear()
 
     # random keep memory
+    #print(len(REPLAY_BUFFER))
     if (len(REPLAY_BUFFER) >= REPLAY_BUFFER_SIZE):
-        REPLAY_BUFFER = REPLAY_BUFFER[0:int(len(REPLAY_BUFFER)*.2)].copy()
+        for i in REPLAY_BUFFER[0:int(len(REPLAY_BUFFER)*.2)]:
+            #print(i)
+            del i
+        pass
     pass
 
     print("Epi:{}  Score:{}  Loss:{}  Reward:{}".format(episode,GameScore,Loss,CuReward))
