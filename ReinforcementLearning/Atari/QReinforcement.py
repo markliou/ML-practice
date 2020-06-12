@@ -59,7 +59,7 @@ DIE_PANELTY = 0
 WARMING_EPI = 0
 BEST_REC = 0.
 BEST_STEPS = 1.
-STATE_GAMMA = .5
+STATE_GAMMA = .25
 REPLAY_BUFFER = []
 Loss = 0
 
@@ -79,12 +79,12 @@ Act_A = Q(Act_S)
 Command_A = tf.argmax(Act_A, axis=-1)
 
 Act_Ap = Q(Act_Sp)
-PL = tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2) #Q 
+PL = tf.reduce_mean(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2)) #Q 
 
 #Opt = tf.train.RMSPropOptimizer(1E-4, momentum=.0, centered=True).minimize(PL)
 #Opt = tf.train.MomentumOptimizer(learning_rate=1E-6, momentum=.8).minimize(PL)
 
-optimizer = tf.train.RMSPropOptimizer(1E-4, .6, momentum=.0, centered=True)
+optimizer = tf.train.RMSPropOptimizer(1E-4, momentum=.9, centered=True)
 gr, va = zip(*optimizer.compute_gradients(PL))
 gr = [None if gr is None else tf.clip_by_norm(grad, 5.) for grad in gr]
 Opt = optimizer.apply_gradients(zip(gr, va))
@@ -132,7 +132,7 @@ while(1):
         Sp = S.copy()
         S, R, finish_flag, info = env.step(A)
         GameScore += R
-        S = np.clip(Sp * STATE_GAMMA + S, 0, 256)  # keep the previoud state as input would be creating a RNN like condition
+        S = np.clip(Sp * STATE_GAMMA + S, 0, 255)  # keep the previoud state as input would be creating a RNN like condition
        
         # handling the reward and actions
         if R > 0:
@@ -143,11 +143,11 @@ while(1):
             R += REWARD_b * .5 # give the reward for moving. This would be helpful for telling agent to avopod bullet
         elif A in [2,3]:
             R += REWARD_b * .1
-        elif A in [1]:
-            Shooting_S.append([Sp, A, S]) # s, s'. Treat it as MC and memory replay hybrid
+        #elif A in [1]:
+        #    Shooting_S.append([Sp, A, S]) # s, s'. Treat it as MC and memory replay hybrid
         pass
 
-        #Shooting_S.append([Sp, A, S]) # s, s'. Treat it as MC and memory replay hybrid
+        Shooting_S.append([Sp, A, S]) # s, s'. Treat it as MC and memory replay hybrid
 
         # advantage
         #Reward_cnt = GAMMA * pow((R - Rp),2)
@@ -173,18 +173,18 @@ while(1):
         if finish_flag or (Clives > info['ale.lives']):
             Clives = info['ale.lives']
             # CuReward = ALPHA * CuReward - DIE_PANELTY 
-            CuReward = -1
+            CuReward = 0
             # CuReward = np.clip(CuReward, 0, None)
             # print('This episode is finished ...')
             A = sess.run(Command_A, feed_dict={Act_S:np.array(Sp).reshape([1, 210, 160, 3])})[0]
-            Loss, _ = sess.run([PL, Opt], 
-                               feed_dict={
-                                          Act_S:np.array(S).reshape([-1, 210, 160, 3]),
-                                          Act_Sp:np.array(Sp).reshape([-1, 210, 160, 3]),
-                                          Act_R:np.array(CuReward).reshape([-1]),
-                                          Actions4Act:np.array(A).reshape([-1]) 
-                                         }
-                               )
+            #Loss, _ = sess.run([PL, Opt], 
+            #                   feed_dict={
+            #                              Act_S:np.array(S).reshape([-1, 210, 160, 3]),
+            #                              Act_Sp:np.array(Sp).reshape([-1, 210, 160, 3]),
+            #                              Act_R:np.array(CuReward).reshape([-1]),
+            #                              Actions4Act:np.array(A).reshape([-1]) 
+            #                             }
+            #                   )
             
             if len(Shooting_S) > 0: # ponishing the shutting state because of die
                 for Si, Ai, Spi in Shooting_S:
@@ -192,7 +192,7 @@ while(1):
                             feed_dict={
                                 Act_S:np.array(Si).reshape([-1, 210, 160, 3]),
                                 Act_Sp:np.array(Spi).reshape([-1, 210, 160, 3]),
-                                Act_R:np.array(-10).reshape([-1]),
+                                Act_R:np.array(-1).reshape([-1]),
                                 Actions4Act:np.array(Ai).reshape([-1])
                                 }
                             )
@@ -222,42 +222,49 @@ while(1):
             else:
                 continue
             pass
+            Sp = np.zoeo([210, 160, 3])
         pass 
         # TD
         #Loss = np.nan
         if  (OPT_FLAG and len(Shooting_S) > 0): # shooting MC
             SN = len(Shooting_S)
             #print('SN {}'.format(SN))
-            SR = (R * 50 )/SN
+            #SR = (R)/SN - REWARD_b
+            SR = (R)/SN 
             #print('SR {}'.format(SR))
-            #for Si, Ai, Spi in Shooting_S:
-            #    Loss, _ = sess.run([PL, Opt], 
-            #                        feed_dict={
-            #                                Act_S:np.array(Si).reshape([-1, 210, 160, 3]),
-            #                                Act_Sp:np.array(Spi).reshape([-1, 210, 160, 3]),
-            #                                Act_R:np.array(SR).reshape([-1]),
-            #                                Actions4Act:np.array(Ai).reshape([-1])
-            #                                }
-            #                       )
-            #    #if (np.random.random() > .8) and (len(REPLAY_BUFFER) < 1E7): # push information into replay buffer
-            #     #   REPLAY_BUFFER.append([Spi, 1, Si, SR])
-            #    #pass
-                
-            #pass
-            OPT_FLAG = False
-            Shooting_S = []
-        elif A in [0, 2, 3] and steps % Opt_size == 0:
-            Loss, _ = sess.run([PL, Opt],
-                                feed_dict={
-                                        Act_S:np.array(S).reshape([-1, 210, 160, 3]),
-                                        Act_Sp:np.array(Sp).reshape([-1, 210, 160, 3]),
-                                        Act_R:np.array(CuReward).reshape([-1]),
-                                        Actions4Act:np.array(A).reshape([-1])
-                                          }
-                               )
-            #if (np.random.random() > .5): # push information into replay buffer
-            #    REPLAY_BUFFER.append([Sp, A, S, CuReward])
-            #pass
+            for Si, Ai, Spi in (Shooting_S):
+
+                # push information into replay buffer
+                if (np.random.random() > .2) and (len(REPLAY_BUFFER) < 1E4):
+                    if len(REPLAY_BUFFER) < 1E4:
+                        REPLAY_BUFFER.append([Spi, Ai, Si, SR])
+                    else:
+                        REPLAY_BUFFER[np.random.randint(len(REPLAY_BUFFER))] = [Spi, Ai, Si, SR]
+                    pass
+                pass
+                OPT_FLAG = False
+                Shooting_S = []
+            pass
+
+            random.shuffle(REPLAY_BUFFER)
+            Sib, Aib, Spib, Rib = [], [], [], []
+            for Spi, Ai, Si, SR in (REPLAY_BUFFER[:64 * 8]):
+                Sib.append(Si)
+                Aib.append(Ai)
+                Spib.append(Spi)
+                Rib.append(SR - REWARD_b * .2)
+                if len(Aib) == 64:
+                    Loss, _ = sess.run([PL, Opt], 
+                                    feed_dict={
+                                            Act_S:np.array(Sib).reshape([-1, 210, 160, 3]),
+                                            Act_Sp:np.array(Spib).reshape([-1, 210, 160, 3]),
+                                            Act_R:np.array(Rib).reshape([-1]),
+                                            Actions4Act:np.array(Aib).reshape([-1])
+                                            }
+                                   )
+                    Sib, Aib, Spib, Rib = [], [], [], []
+                pass
+            pass
         pass
 
         #print('Action:{}  Loss:{} Epsilon:{} greedy:{} score:{}'.format(A, Loss, EPSILONE/np.clip(episode-WARMING_EPI,1E-9,None), Greedy_flag, GameScore))
@@ -282,6 +289,6 @@ while(1):
     #    REPLAY_BUFFER = REPLAY_BUFFER[0:int(np.random.random() * len(REPLAY_BUFFER))]
     #pass
 
-    print("Epi:{}  Score:{}  Loss:{}  Reward:{}".format(episode,GameScore,Loss,CuReward))
+    print("Epi:{}  Score:{}  Loss:{}  Reward:{}  steps:{}  memory:{}".format(episode, GameScore, Loss, CuReward, steps, len(REPLAY_BUFFER)))
 
 pass
