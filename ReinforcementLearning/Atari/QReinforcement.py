@@ -113,7 +113,7 @@ while(1):
     while(1):
         steps += 1
     # for step in range(STEP_LIMIT):
-        #env.render() # show the windows. If you don't need to monitor the state, just comment this.
+        env.render() # show the windows. If you don't need to monitor the state, just comment this.
         # print(S)
         
         # A = env.action_space.sample() # random sampling the actions
