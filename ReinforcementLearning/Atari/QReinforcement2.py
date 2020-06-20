@@ -64,7 +64,7 @@ REPLAY_BUFFER = []
 Loss = 0
 
 env = gym.make('SpaceInvaders-v0') 
-os.system("echo > score_rec.txt") #clean the previoud recorders
+os.system("echo > score_rec2.txt") #clean the previoud recorders
 
 # Actor settings
 Opt_size = 16 # skip frames
@@ -89,7 +89,9 @@ gr, va = zip(*optimizer.compute_gradients(PL))
 gr = [None if gr is None else tf.clip_by_norm(grad, 5.) for grad in gr]
 Opt = optimizer.apply_gradients(zip(gr, va))
 
-sess = tf.Session()
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+sess = tf.Session(config=config)
 sess.run(tf.global_variables_initializer())
 
 episode = 0
@@ -192,7 +194,7 @@ while(1):
                             feed_dict={
                                 Act_S:np.array(Si).reshape([-1, 210, 160, 3]),
                                 Act_Sp:np.array(Spi).reshape([-1, 210, 160, 3]),
-                                Act_R:np.array(0).reshape([-1]),
+                                Act_R:np.array((-1/len(Shooting_S)) - REWARD_b * .1).reshape([-1]),
                                 Actions4Act:np.array(Ai).reshape([-1])
                                 }
                             )
@@ -241,6 +243,14 @@ while(1):
                     else:
                         REPLAY_BUFFER[np.random.randint(len(REPLAY_BUFFER))] = [Spi, Ai, Si, SR]
                     pass
+                    Loss, _ = sess.run([PL, Opt],
+                            feed_dict={
+                                Act_S:np.array(Si).reshape([-1, 210, 160, 3]),
+                                Act_Sp:np.array(Spi).reshape([-1, 210, 160, 3]),
+                                Act_R:np.array((SR - REWARD_b * .1)/256).reshape([-1]),
+                                Actions4Act:np.array(Ai).reshape([-1])
+                                }
+                            )
                 pass
                 OPT_FLAG = False
                 Shooting_S = []
@@ -253,7 +263,7 @@ while(1):
                 Aib.append(Ai)
                 Spib.append(Spi)
                 Rib.append(SR - REWARD_b * .1)
-                if len(Aib) == 64:
+                if len(Aib) == 256:
                     Loss, _ = sess.run([PL, Opt], 
                                     feed_dict={
                                             Act_S:np.array(Sib).reshape([-1, 210, 160, 3]),
