@@ -253,8 +253,10 @@ while(1):
             pass
 
             random.shuffle(REPLAY_BUFFER)
+            training_buffer = CURRENT_BUFFER + REPLAY_BUFFER[:int(len(REPLAY_BUFFER) * .6)]
+            random.shuffle(training_buffer)
             Sib, Aib, Spib, Rib = [], [], [], []
-            for Spi, Ai, Si, SR in (CURRENT_BUFFER + REPLAY_BUFFER[:int(len(REPLAY_BUFFER) * .8)]):
+            for Spi, Ai, Si, SR in (training_buffer):
                 Sib.append(Si)
                 Aib.append(Ai)
                 Spib.append(Spi)
