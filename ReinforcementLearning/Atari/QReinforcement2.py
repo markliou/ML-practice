@@ -62,9 +62,10 @@ BEST_STEPS = 1.
 STATE_GAMMA = .8
 REPLAY_BUFFER = []
 Loss = 0
+SCORE_REC_FILE = 'score_rec2.txt'
 
 env = gym.make('SpaceInvaders-v0') 
-os.system("echo > score_rec2.txt") #clean the previoud recorders
+os.system("echo > {}".format(SCORE_REC_FILE)) #clean the previoud recorders
 
 # Actor settings
 Opt_size = 16 # skip frames
@@ -219,7 +220,7 @@ while(1):
                     DIE_PANELTY = CuReward * .8 
                     #print(DIE_PANELTY)
                 pass
-                os.system("echo {} >> score_rec.txt".format(GameScore))
+                os.system("echo {} >> {}".format(GameScore, SCORE_REC_FILE))
                 break
             else:
                 continue
@@ -234,7 +235,10 @@ while(1):
             #SR = (R)/SN - REWARD_b
             SR = (R)/SN 
             #print('SR {}'.format(SR))
+            CURRENT_BUFFER = []
             for Si, Ai, Spi in (Shooting_S):
+
+                CURRENT_BUFFER.append([Spi, Ai, Si, SR])
 
                 # push information into replay buffer
                 if (np.random.random() > .8):
@@ -243,14 +247,6 @@ while(1):
                     else:
                         REPLAY_BUFFER[np.random.randint(len(REPLAY_BUFFER))] = [Spi, Ai, Si, SR]
                     pass
-                    Loss, _ = sess.run([PL, Opt],
-                            feed_dict={
-                                Act_S:np.array(Si).reshape([-1, 210, 160, 3]),
-                                Act_Sp:np.array(Spi).reshape([-1, 210, 160, 3]),
-                                Act_R:np.array((SR - REWARD_b * .1)/256).reshape([-1]),
-                                Actions4Act:np.array(Ai).reshape([-1])
-                                }
-                            )
                 pass
                 OPT_FLAG = False
                 Shooting_S = []
@@ -258,12 +254,12 @@ while(1):
 
             random.shuffle(REPLAY_BUFFER)
             Sib, Aib, Spib, Rib = [], [], [], []
-            for Spi, Ai, Si, SR in (REPLAY_BUFFER[:int(len(REPLAY_BUFFER) * .8)]):
+            for Spi, Ai, Si, SR in (CURRENT_BUFFER + REPLAY_BUFFER[:int(len(REPLAY_BUFFER) * .8)]):
                 Sib.append(Si)
                 Aib.append(Ai)
                 Spib.append(Spi)
-                Rib.append(SR - REWARD_b * .1)
-                if len(Aib) == 256:
+                Rib.append(SR - REWARD_b * .8)
+                if len(Aib) == 128:
                     Loss, _ = sess.run([PL, Opt], 
                                     feed_dict={
                                             Act_S:np.array(Sib).reshape([-1, 210, 160, 3]),
