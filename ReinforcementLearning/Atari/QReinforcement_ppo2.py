@@ -3,6 +3,7 @@ import tensorflow as tf
 import numpy as np
 import os
 import random
+from collections import deque
 
 try:
     tf = tf.compat.v1
@@ -55,12 +56,12 @@ REWARD_b = .0
 REWARD_NORMA = 500 # because the peak reward is close to 500, empiritically
 GAMMA = .5
 ALPHA = .9
-PPO_EPSILON = .2
+PPO_EPSILON = .5
 DIE_PANELTY = 0
 WARMING_EPI = 0
 BEST_REC = 0.
 BEST_STEPS = 1.
-STATE_GAMMA = .5
+STATE_GAMMA = .8
 REPLAY_BUFFER = []
 Loss = 0
 SCORE_REC_FILE = 'score_rec2.txt'
@@ -84,18 +85,21 @@ Command_A = tf.argmax(Act_A, axis=-1)
 
 Act_Ap = Q(Act_Sp)
 pip = tf.reduce_max(tf.nn.softmax(Act_Ap) * Actions4Act_oh) 
+
 rho = tf.clip_by_value((pip/Act_pi),1 - PPO_EPSILON , 1 + PPO_EPSILON)
-PPO_R = tf.reduce_min(tf.concat([tf.expand_dims(Act_R, axis=-1), tf.expand_dims(Act_R * rho, axis=-1)], axis=1), axis=-1)
-PPO_PL = tf.reduce_mean(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)) * rho , 2))
+#rho = tf.log(pip + Act_pi) - tf.log(pip)
+
+#PPO_R = tf.reduce_min(tf.concat([tf.expand_dims(Act_R, axis=-1), tf.expand_dims(Act_R * rho, axis=-1)], axis=1), axis=-1)
+PPO_PL = tf.reduce_mean(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)) * rho, 2))
 PL = tf.reduce_mean(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2)) #Q 
 
 #Opt = tf.train.RMSPropOptimizer(1E-4, momentum=.0, centered=True).minimize(PL)
 #Opt = tf.train.MomentumOptimizer(learning_rate=1E-6, momentum=.8).minimize(PL)
 
-optimizer = tf.train.RMSPropOptimizer(1E-4, momentum=.6, centered=False)
+optimizer = tf.train.RMSPropOptimizer(1E-4, momentum=.6, centered=True)
 #gr, va = zip(*optimizer.compute_gradients(PL))
 gr, va = zip(*optimizer.compute_gradients(PPO_PL))
-gr = [None if gr is None else tf.clip_by_norm(grad, 5.) for grad in gr]
+gr = [None if gr is None else tf.clip_by_norm(grad, 10.) for grad in gr]
 Opt = optimizer.apply_gradients(zip(gr, va))
 
 config = tf.ConfigProto()
@@ -250,6 +254,7 @@ while(1):
             SN = len(Shooting_S)
             #print('SN {}'.format(SN))
             #SR = (R/SN) - REWARD_b * .8
+            tf.clip_by_value(CuReward, 0, 50)
             SR = CuReward/SN
             #SR = (R)/SN 
             #print('SR {}'.format(SR))
@@ -261,29 +266,39 @@ while(1):
 
             for Si, Ai, Spi, pii in (Shooting_S):
                 # push information into replay buffer
-                if (np.random.random() > .2) :
+                if (np.random.random() > .2) and (SR > REWARD_b * .2) :
                     CURRENT_BUFFER.append([Spi, Ai, Si, SR, pii])
                     if len(REPLAY_BUFFER) < 1.5E4:
                         REPLAY_BUFFER.append([Spi, Ai, Si, SR, pii])
-                    elif (SR > REWARD_b * .8):
-                        REPLAY_BUFFER[np.random.randint(len(REPLAY_BUFFER))] = [Spi, Ai, Si, SR, pii]
+                    #elif (SR > REWARD_b * .8):
+                    else:
+                        #REPLAY_BUFFER[np.random.randint(len(REPLAY_BUFFER))] = [Spi, Ai, Si, SR, pii]
+                        REPLAY_BUFFER.reverse()
+                        REPLAY_BUFFER.pop()
+                        REPLAY_BUFFER.reverse()
+                        REPLAY_BUFFER.append([Spi, Ai, Si, SR, pii])
                     pass
                 pass
                 OPT_FLAG = False
                 Shooting_S = []
             pass
 
-            random.shuffle(REPLAY_BUFFER)
-            #training_buffer = CURRENT_BUFFER + REPLAY_BUFFER[:int(len(REPLAY_BUFFER) * .8)]
-            #random.shuffle(training_buffer)
+            #random.shuffle(REPLAY_BUFFER)
+            #if (GameScore * .5 > BEST_REC) or (steps * .5 > BEST_STEPS): 
+            if True:
+                training_buffer = CURRENT_BUFFER + REPLAY_BUFFER[:int(len(REPLAY_BUFFER) * .2)]
+            else:
+                training_buffer = REPLAY_BUFFER
+            pass
+            random.shuffle(training_buffer)
             Sib, Aib, Spib, Rib, piib = [], [], [], [], []
-            for Spi, Ai, Si, SR, pii in (REPLAY_BUFFER):
+            for Spi, Ai, Si, SR, pii in (training_buffer):
                 Sib.append(Si)
                 Aib.append(Ai)
                 Spib.append(Spi)
-                Rib.append(SR - REWARD_b * .2)
+                Rib.append(SR - REWARD_b * .1)
                 piib.append(pii)
-                if len(Aib) == 64:
+                if len(Aib) == 32:
                     Loss, _ = sess.run([PL, Opt], 
                                     feed_dict={
                                             Act_S:np.array(Sib).reshape([-1, 210, 160, 3]),
