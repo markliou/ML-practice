@@ -122,31 +122,34 @@ Act_pi = tf.placeholder(tf.float32, [None])
 Actions4Act = tf.placeholder(tf.uint8, [None])
 Actions4Act_oh = tf.one_hot(Actions4Act, 4) 
 
-Act_A = Q(Act_S)
+#Act_A = Q(Act_S)
+Act_A = tQ(Act_S)
 pi = tf.reduce_max(tf.nn.softmax(Act_A) * Actions4Act_oh) 
 Command_A = tf.argmax(Act_A, axis=-1)
 
 Act_Ap = Q(Act_Sp)
 Act_Apt = tQ(Act_Sp)
+#Act_Apt = tQ(Act_Sp + tf.random.uniform(tf.shape(Act_Sp), .0, .1))
 pip  = tf.reduce_max(tf.nn.softmax(Act_Ap) * Actions4Act_oh) 
 pipt = tf.reduce_max(tf.nn.softmax(Act_Apt) * Actions4Act_oh)
 
 Q_weights = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Q')
 tQ_weights = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='tQ')
 update_Q = [tf.assign(q, tq) for q,tq in zip(Q_weights,tQ_weights)]
-#update_tQ = [tf.assign(tq, (q * 1e-5 + tq * (1-1e-5))) for q,tq in zip(Q_weights,tQ_weights)]
-update_tQ = [tf.assign(tq, q) for q,tq in zip(Q_weights,tQ_weights)]
+update_tQ = [tf.assign(tq, (q * 1e-4 + tq * (1-1e-4))) for q,tq in zip(Q_weights,tQ_weights)]
+#update_tQ = [tf.assign(tq, q) for q,tq in zip(Q_weights,tQ_weights)]
 
 #rho = tf.clip_by_value((pip/Act_pi),1 - PPO_EPSILON , 1 + PPO_EPSILON)
 #rho = tf.clip_by_value((pipt/pip),1 - PPO_EPSILON , 1 + PPO_EPSILON)
 #rho = tf.clip_by_value((pip/pipt),0 , 1 + PPO_EPSILON)
 #rho = tf.log(pip + Act_pi) - tf.log(pip)
-rho = 5
+rho = 25
 
 #PPO_R = tf.reduce_min(tf.concat([tf.expand_dims(Act_R, axis=-1), tf.expand_dims(Act_R * rho, axis=-1)], axis=1), axis=-1)
 #PPO_PL = tf.reduce_mean(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2) * rho) 
 #PPO_PL = tf.reduce_mean(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2) - rho)
 #PPO_PL = tf.clip_by_value(tf.reduce_mean(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2)), rho, -rho)
+#PPO_PL = tf.reduce_mean(tf.clip_by_value(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2), rho, -rho))
 PPO_PL = tf.reduce_mean(tf.clip_by_value(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2), rho, -rho))
 PL = tf.reduce_mean(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2)) #Q
 
@@ -248,7 +251,7 @@ while(1):
 
         # CuReward = CuReward * GAMMA + R
         CuReward = ALPHA * CuReward + R
-        CuReward += .1 #step reward 
+        CuReward += 1. #step reward 
         # CuReward = R 
         # CuReward = 1 + Reward_cnt # normalized reward with game score
         # CuReward += Reward_cnt
@@ -320,7 +323,7 @@ while(1):
             pass
             #Shooting_S = []
             Sp = np.zoeo([210, 160, 3])
-            CuReward = 0
+            CuReward -= REWARD_b
         pass 
         # TD
         #Loss = np.nan
@@ -336,12 +339,13 @@ while(1):
             CURRENT_BUFFER = []
 
             #if REWARD_b < CuReward/len(Shooting_S): #(CuReward/steps): #(GameScore/steps) :
-            if REWARD_b < CuReward:
+            if REWARD_b < CuReward * .9:
             #if 1:
                 #REWARD_b = (CuReward/len(Shooting_S))
                 #REWARD_b = CuReward/steps
                 #REWARD_b = (CuReward/len(Shooting_S)) * .1 + REWARD_b * .9
-                REWARD_b = CuReward * .9
+                REWARD_b = CuReward
+                REPLAY_BUFFER = []
             pass
         pass 
         if (OPT_FLAG):
