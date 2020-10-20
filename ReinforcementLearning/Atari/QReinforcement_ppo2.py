@@ -104,7 +104,7 @@ DIE_PANELTY = 0
 WARMING_EPI = 0
 BEST_REC = 0.
 BEST_STEPS = 1.
-STATE_GAMMA = .8
+STATE_GAMMA = .99
 REPLAY_BUFFER = []
 Loss = 0
 SCORE_REC_FILE = 'score_rec2.txt'
@@ -143,14 +143,14 @@ update_tQ = [tf.assign(tq, (q * 1e-4 + tq * (1-1e-4))) for q,tq in zip(Q_weights
 #rho = tf.clip_by_value((pipt/pip),1 - PPO_EPSILON , 1 + PPO_EPSILON)
 #rho = tf.clip_by_value((pip/pipt),0 , 1 + PPO_EPSILON)
 #rho = tf.log(pip + Act_pi) - tf.log(pip)
-rho = 25
+rho = 50
 
 #PPO_R = tf.reduce_min(tf.concat([tf.expand_dims(Act_R, axis=-1), tf.expand_dims(Act_R * rho, axis=-1)], axis=1), axis=-1)
 #PPO_PL = tf.reduce_mean(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2) * rho) 
 #PPO_PL = tf.reduce_mean(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2) - rho)
 #PPO_PL = tf.clip_by_value(tf.reduce_mean(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2)), rho, -rho)
 #PPO_PL = tf.reduce_mean(tf.clip_by_value(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2), rho, -rho))
-PPO_PL = tf.reduce_mean(tf.clip_by_value(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2), rho, -rho))
+PPO_PL = tf.reduce_mean(tf.clip_by_value(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2), -rho, rho))
 PL = tf.reduce_mean(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2)) #Q
 
 #Opt = tf.train.RMSPropOptimizer(1E-4, momentum=.0, centered=True).minimize(PPO_PL)
@@ -162,7 +162,7 @@ optimizer = tf.train.RMSPropOptimizer(1E-4, momentum=.9, centered=True)
 #gr, va = zip(*optimizer.compute_gradients(PL))
 gr_va = optimizer.compute_gradients(PPO_PL, var_list=Q_weights)
 #gr_va = optimizer.compute_gradients(PL, var_list=Q_weights)
-capped_gvs = [(grad if grad is None else tf.clip_by_norm(grad, clip_norm=5.), var) for grad, var in gr_va]
+capped_gvs = [(grad if grad is None else tf.clip_by_norm(grad, clip_norm=1.), var) for grad, var in gr_va]
 #gr = [None if gr is None else tf.clip_by_norm(grad, 1.) for grad in gr]
 #gr = [grad if gr is None else tf.clip_by_norm(grad, .5) for grad in gr]
 Opt = optimizer.apply_gradients(capped_gvs)
@@ -181,7 +181,7 @@ while(1):
     Clives = 3
     Reward_cnt = 0.
     #CuReward = 0.
-    CuReward = -REWARD_b
+    CuReward = -REWARD_b * .6
     R_list, S_list = [],[]
     Shooting_S = []
     
@@ -194,7 +194,7 @@ while(1):
     while(1):
         steps += 1
     # for step in range(STEP_LIMIT):
-        #env.render() # show the windows. If you don't need to monitor the state, just comment this.
+        # env.render() # show the windows. If you don't need to monitor the state, just comment this.
         # print(S)
         
         # A = env.action_space.sample() # random sampling the actions
@@ -323,7 +323,7 @@ while(1):
             pass
             #Shooting_S = []
             Sp = np.zoeo([210, 160, 3])
-            CuReward -= REWARD_b
+            CuReward -= REWARD_b * .8
         pass 
         # TD
         #Loss = np.nan
@@ -339,7 +339,8 @@ while(1):
             CURRENT_BUFFER = []
 
             #if REWARD_b < CuReward/len(Shooting_S): #(CuReward/steps): #(GameScore/steps) :
-            if REWARD_b < CuReward * .9:
+            #if (REWARD_b < CuReward) and OPT_FLAG:
+            if (REWARD_b < CuReward):
             #if 1:
                 #REWARD_b = (CuReward/len(Shooting_S))
                 #REWARD_b = CuReward/steps
