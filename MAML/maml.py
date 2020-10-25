@@ -4,7 +4,7 @@ import tensorflow_datasets as tfds
 
 inner_lr = 1E-3
 outter_lr = 1E-3
-inner_task_loop_no = 128 # give 30 tasks of 2ways-1shot
+inner_task_loop_no = 32 # give 32 tasks of 2ways-1shot
 opt_inner = tf.keras.optimizers.RMSprop(inner_lr)
 opt_outter = tf.keras.optimizers.RMSprop(outter_lr)
 
