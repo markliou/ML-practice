@@ -1,6 +1,6 @@
 MAML
 ==
-Using TF2 for training the MAML model.
+Using TF2 and tf-keras for training the MAML model.
 The essential functions are listed:
 1. get the weights
 2. assign the weights
