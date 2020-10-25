@@ -64,6 +64,8 @@ for step in range(5000):
             opt_inner.minimize(loss=loss_inner, var_list=cnn_model.trainable_weights) 
             
             # calculating the task loss (after the meta-weights updating)
+            # here, the same support set and query set are used. you can 
+            # also creat a different query set for meta-weight training.
             loss_outter += loss_inner()
         pass 
         return loss_outter/inner_task_loop_no
