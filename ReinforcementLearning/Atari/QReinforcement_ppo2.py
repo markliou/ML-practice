@@ -11,14 +11,14 @@ try:
 except ImportError:
     pass
 
-def conv2d(X, name, channel_no = 64, kernel_size = 3, stride_no = 1):
+def conv2d(X, name, channel_no = 64, kernel_size = 3, stride_no = 1, activation=tf.nn.relu):
     #with tf.variable_scope('conv_b', reuse=False):    
      return tf.layers.conv2d(X, channel_no, 
                                    [kernel_size, kernel_size], 
                                    [stride_no, stride_no], 
                                    padding='SAME', 
                                    kernel_initializer=tf.keras.initializers.glorot_normal,
-                                   activation=tf.nn.relu,
+                                   activation=activation,
                                    reuse=False,
                                    name=name
                                    )
@@ -28,27 +28,31 @@ def Q(S):
     with tf.variable_scope('Q', reuse=tf.AUTO_REUSE): 
     #if True:
         So = (tf.cast(S, tf.float32)-128)/128.  #(210, 160, 3)
+        #Sr = tf.image.resize(So, (110, 84))[13:110 - 13, :]
         #S = tf.layers.Dropout(.5)(S)
         Sf = tf.layers.conv2d(So, 16, [1,1], [1,1], padding='SAME', activation=tf.nn.relu, reuse=False, name='So')
         conv1 = conv2d(So, stride_no=2, name='conv1') #(105, 80)
-        conv1 = tf.layers.Dropout(.5)(conv1)
+        #conv1 = tf.layers.Dropout(.5)(conv1)
         conv2 = conv2d(conv1, stride_no=2, name='conv2') #(53, 40)
-        conv2 = tf.layers.Dropout(.5)(conv2)
+        #conv2 = tf.layers.Dropout(.5)(conv2)
         conv3 = conv2d(conv2, stride_no=2, name='conv3') #(27, 20)
-        conv3 = tf.layers.Dropout(.5)(conv3)
+        #conv3 = tf.layers.Dropout(.5)(conv3)
         conv4 = conv2d(conv3, channel_no=128, stride_no=2, name='conv4') #(14, 10)
-        conv4 = tf.layers.Dropout(.5)(conv4)
+        #conv4 = tf.layers.Dropout(.5)(conv4)
         conv5 = conv2d(conv4, channel_no=256, stride_no=2, name='conv5') #(7, 5)
-        conv5 = tf.layers.Dropout(.5)(conv5)
-        conv6 = conv2d(conv5, channel_no=512, stride_no=2, name='conv6') #(4, 3)
-        conv6 = tf.layers.Dropout(.5)(conv6)
+        #conv5 = tf.layers.Dropout(.5)(conv5)
+        conv6 = conv2d(conv5, channel_no=512, stride_no=2, activation=None, name='conv6') #(4, 3)
+        #conv6 = tf.layers.Dropout(.5)(conv6)
+
+        conv6g = conv2d(conv5, channel_no=512, stride_no=2, activation=tf.nn.softmax, name='conv6g')
+        conv6 *= conv6g 
     
         f1 = tf.layers.flatten(conv6)
         #f1 = tf.layers.Dropout(.5)(f1)
         f2 = tf.layers.dense(f1, 1024, activation=tf.nn.relu)
         #f2 = tf.layers.Dropout(.5)(f2)
-        for i in range(10):
-            f2 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)(f2) + f2
+        for i in range(5):
+            f2 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)(f2)
             #f2 = tf.layers.Dropout(.5)(f2)
             #f2 = tf.keras.layers.LayerNormalization()(f2)
         pass
@@ -62,27 +66,32 @@ def tQ(S):
     with tf.variable_scope('tQ', reuse=tf.AUTO_REUSE):
     #if True:
         So = (tf.cast(S, tf.float32)-128)/128.  #(210, 160, 3)
+        #Sr = tf.image.resize(So, (110, 84))[13:110 - 13, :]
         #S = tf.layers.Dropout(.5)(S)
         Sf = tf.layers.conv2d(So, 16, [1,1], [1,1], padding='SAME', activation=tf.nn.relu, reuse=False, name='So')
         conv1 = conv2d(So, stride_no=2, name='conv1') #(105, 80)
-        #conv1 = tf.layers.Dropout(.5)(conv1)
+        conv1 = tf.layers.Dropout(.5)(conv1)
         conv2 = conv2d(conv1, stride_no=2, name='conv2') #(53, 40)
-        #conv2 = tf.layers.Dropout(.5)(conv2)
+        conv2 = tf.layers.Dropout(.5)(conv2)
         conv3 = conv2d(conv2, stride_no=2, name='conv3') #(27, 20)
-        #conv3 = tf.layers.Dropout(.5)(conv3)
+        conv3 = tf.layers.Dropout(.5)(conv3)
         conv4 = conv2d(conv3, channel_no=128, stride_no=2, name='conv4') #(14, 10)
-        #conv4 = tf.layers.Dropout(.5)(conv4)
+        conv4 = tf.layers.Dropout(.5)(conv4)
         conv5 = conv2d(conv4, channel_no=256, stride_no=2, name='conv5') #(7, 5)
-        #conv5 = tf.layers.Dropout(.5)(conv5)
-        conv6 = conv2d(conv5, channel_no=512, stride_no=2, name='conv6') #(4, 3)
+        conv5 = tf.layers.Dropout(.5)(conv5)
+        conv6 = conv2d(conv5, channel_no=512, stride_no=2, activation=None, name='conv6') #(4, 3)
         #conv6 = tf.layers.Dropout(.5)(conv6)
+
+        conv6g = conv2d(conv5, channel_no=512, stride_no=2, activation=tf.nn.softmax, name='conv6g')
+        conv6 *= conv6g
 
         f1 = tf.layers.flatten(conv6)
         #f1 = tf.layers.Dropout(.5)(f1)
         f2 = tf.layers.dense(f1, 1024, activation=tf.nn.relu)
         #f2 = tf.layers.Dropout(.5)(f2)
-        for i in range(10):
-            f2 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)(f2) + f2
+        for i in range(5):
+            f2 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)(f2) 
+            f2 = tf.layers.Dropout(.5)(f2)
             #f2 = tf.keras.layers.LayerNormalization()(f2)
         pass
         f3 = tf.layers.dense(f2, 512, activation=tf.nn.relu)
@@ -104,7 +113,7 @@ DIE_PANELTY = 0
 WARMING_EPI = 0
 BEST_REC = 0.
 BEST_STEPS = 1.
-STATE_GAMMA = .99
+STATE_GAMMA = 1.
 REPLAY_BUFFER = []
 Loss = 0
 SCORE_REC_FILE = 'score_rec2.txt'
@@ -122,10 +131,11 @@ Act_pi = tf.placeholder(tf.float32, [None])
 Actions4Act = tf.placeholder(tf.uint8, [None])
 Actions4Act_oh = tf.one_hot(Actions4Act, 4) 
 
-#Act_A = Q(Act_S)
-Act_A = tQ(Act_S)
+Act_A = Q(Act_S)
+Act_At = tQ(Act_S)
 pi = tf.reduce_max(tf.nn.softmax(Act_A) * Actions4Act_oh) 
-Command_A = tf.argmax(Act_A, axis=-1)
+#Command_A = tf.argmax(Act_A, axis=-1)
+Command_A = tf.argmax(Act_At, axis=-1)
 
 Act_Ap = Q(Act_Sp)
 Act_Apt = tQ(Act_Sp)
@@ -136,7 +146,7 @@ pipt = tf.reduce_max(tf.nn.softmax(Act_Apt) * Actions4Act_oh)
 Q_weights = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Q')
 tQ_weights = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='tQ')
 update_Q = [tf.assign(q, tq) for q,tq in zip(Q_weights,tQ_weights)]
-update_tQ = [tf.assign(tq, (q * 1e-4 + tq * (1-1e-4))) for q,tq in zip(Q_weights,tQ_weights)]
+update_tQ = [tf.assign(tq, (q * 1e-3 + tq * (1-1e-3))) for q,tq in zip(Q_weights,tQ_weights)]
 #update_tQ = [tf.assign(tq, q) for q,tq in zip(Q_weights,tQ_weights)]
 
 #rho = tf.clip_by_value((pip/Act_pi),1 - PPO_EPSILON , 1 + PPO_EPSILON)
@@ -158,11 +168,11 @@ PL = tf.reduce_mean(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap 
 #Opt = tf.train.RMSPropOptimizer(1E-4, momentum=.9, centered=False).minimize(PPO_PL, var_list=tQ_weights)
 
 #optimizer = tf.train.MomentumOptimizer(1E-3, momentum=.0)
-optimizer = tf.train.RMSPropOptimizer(1E-4, momentum=.9, centered=True)
+optimizer = tf.train.RMSPropOptimizer(1E-4, momentum=.6, decay=.6, centered=True)
 #gr, va = zip(*optimizer.compute_gradients(PL))
 gr_va = optimizer.compute_gradients(PPO_PL, var_list=Q_weights)
 #gr_va = optimizer.compute_gradients(PL, var_list=Q_weights)
-capped_gvs = [(grad if grad is None else tf.clip_by_norm(grad, clip_norm=1.), var) for grad, var in gr_va]
+capped_gvs = [(grad if grad is None else tf.clip_by_norm(grad, clip_norm=15.), var) for grad, var in gr_va]
 #gr = [None if gr is None else tf.clip_by_norm(grad, 1.) for grad in gr]
 #gr = [grad if gr is None else tf.clip_by_norm(grad, .5) for grad in gr]
 Opt = optimizer.apply_gradients(capped_gvs)
@@ -180,8 +190,8 @@ while(1):
     GameScore = 0
     Clives = 3
     Reward_cnt = 0.
-    #CuReward = 0.
-    CuReward = -REWARD_b * .6
+    CuReward = 0.
+    #CuReward = -REWARD_b * .2
     R_list, S_list = [],[]
     Shooting_S = []
     
@@ -221,7 +231,7 @@ while(1):
         Sp = S.copy()
         S, R, finish_flag, info = env.step(A)
         GameScore += R
-        S = np.clip(Sp * STATE_GAMMA *.9 + S * 1., 0, 255)  # keep the previoud state as input would be creating a RNN like condition
+        S = np.clip(Sp * STATE_GAMMA *.5 + S * .5, 0, 255)  # keep the previoud state as input would be creating a RNN like condition
         #S = Sp
        
         # handling the reward and actions
@@ -251,7 +261,7 @@ while(1):
 
         # CuReward = CuReward * GAMMA + R
         CuReward = ALPHA * CuReward + R
-        CuReward += 1. #step reward 
+        CuReward += .05 #step reward 
         # CuReward = R 
         # CuReward = 1 + Reward_cnt # normalized reward with game score
         # CuReward += Reward_cnt
@@ -294,7 +304,7 @@ while(1):
             
             if finish_flag:
                 sess.run(update_tQ)
-                CuReward -= REWARD_b
+                #CuReward -= REWARD_b
                 if BEST_REC < GameScore:
                     BEST_REC = GameScore 
                    # sess.run(update_tQ)
@@ -323,7 +333,7 @@ while(1):
             pass
             #Shooting_S = []
             Sp = np.zoeo([210, 160, 3])
-            CuReward -= REWARD_b * .8
+            #CuReward -= REWARD_b * .2
         pass 
         # TD
         #Loss = np.nan
@@ -332,7 +342,7 @@ while(1):
             SN = len(Shooting_S)
             #print('SN {}'.format(SN))
             #SR = (R/SN) - REWARD_b * .8
-            #tf.clip_by_value(CuReward, 0, 50) # reward clipping
+            tf.clip_by_value(CuReward, 0, 50) # reward clipping
             SR = CuReward/SN
             #SR = (R)/SN 
             #print('SR {}'.format(SR))
@@ -380,8 +390,9 @@ while(1):
                 reward_mean = reward_np_array.mean()
                 reward_std  = reward_np_array.std()
                 reward_hq = np.quantile(reward_np_array, .8)
+                reward_lq = np.quantile(reward_np_array, .2) 
             else:
-                reward_mean = reward_hq = 0
+                reward_mean = reward_hq = reward_lq = 0
                 reward_std = 1
             pass
 
@@ -393,8 +404,9 @@ while(1):
                     Aib.append(Ai)
                     Spib.append(Spi)
                     #Rib.append(SR - REWARD_b * .2)
-                    Rib.append(SR)
+                    #Rib.append(SR)
                     #Rib.append((SR - reward_mean)/reward_std)
+                    Rib.append((SR - reward_lq)/(reward_hq - reward_lq + 0.00000001) * 2 - .2)
                     #Rib.append(SR - reward_hq)
                     piib.append(pii)
                     if len(Aib) == 64:
@@ -440,5 +452,5 @@ while(1):
     print("Epi:{}  Score:{}  Loss:{}  Reward:{}  steps:{}  memory:{}".format(episode, GameScore, Loss, CuReward, steps, len(REPLAY_BUFFER)))
         
     #sess.run(update_tQ)
-    #sess.run(update_Q)
+    sess.run(update_Q)
 pass
