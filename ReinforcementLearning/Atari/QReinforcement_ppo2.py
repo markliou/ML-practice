@@ -49,7 +49,7 @@ def Q(S):
     
         f1 = tf.layers.flatten(conv6)
         #f1 = tf.layers.Dropout(.5)(f1)
-        f2 = tf.layers.dense(f1, 1024, activation=tf.nn.relu)
+        f2 = tf.layers.dense(f1, 256, activation=tf.nn.relu)
         #f2 = tf.layers.Dropout(.5)(f2)
         for i in range(5):
             f2 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)(f2)
@@ -70,15 +70,15 @@ def tQ(S):
         #S = tf.layers.Dropout(.5)(S)
         Sf = tf.layers.conv2d(So, 16, [1,1], [1,1], padding='SAME', activation=tf.nn.relu, reuse=False, name='So')
         conv1 = conv2d(So, stride_no=2, name='conv1') #(105, 80)
-        conv1 = tf.layers.Dropout(.5)(conv1)
+        #conv1 = tf.layers.Dropout(.5)(conv1)
         conv2 = conv2d(conv1, stride_no=2, name='conv2') #(53, 40)
-        conv2 = tf.layers.Dropout(.5)(conv2)
+        #conv2 = tf.layers.Dropout(.5)(conv2)
         conv3 = conv2d(conv2, stride_no=2, name='conv3') #(27, 20)
-        conv3 = tf.layers.Dropout(.5)(conv3)
+        #conv3 = tf.layers.Dropout(.5)(conv3)
         conv4 = conv2d(conv3, channel_no=128, stride_no=2, name='conv4') #(14, 10)
-        conv4 = tf.layers.Dropout(.5)(conv4)
+        #conv4 = tf.layers.Dropout(.5)(conv4)
         conv5 = conv2d(conv4, channel_no=256, stride_no=2, name='conv5') #(7, 5)
-        conv5 = tf.layers.Dropout(.5)(conv5)
+        #conv5 = tf.layers.Dropout(.5)(conv5)
         conv6 = conv2d(conv5, channel_no=512, stride_no=2, activation=None, name='conv6') #(4, 3)
         #conv6 = tf.layers.Dropout(.5)(conv6)
 
@@ -87,11 +87,11 @@ def tQ(S):
 
         f1 = tf.layers.flatten(conv6)
         #f1 = tf.layers.Dropout(.5)(f1)
-        f2 = tf.layers.dense(f1, 1024, activation=tf.nn.relu)
+        f2 = tf.layers.dense(f1, 256, activation=tf.nn.relu)
         #f2 = tf.layers.Dropout(.5)(f2)
         for i in range(5):
             f2 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)(f2) 
-            f2 = tf.layers.Dropout(.5)(f2)
+            #f2 = tf.layers.Dropout(.5)(f2)
             #f2 = tf.keras.layers.LayerNormalization()(f2)
         pass
         f3 = tf.layers.dense(f2, 512, activation=tf.nn.relu)
@@ -146,14 +146,14 @@ pipt = tf.reduce_max(tf.nn.softmax(Act_Apt) * Actions4Act_oh)
 Q_weights = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Q')
 tQ_weights = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='tQ')
 update_Q = [tf.assign(q, tq) for q,tq in zip(Q_weights,tQ_weights)]
-update_tQ = [tf.assign(tq, (q * 1e-3 + tq * (1-1e-3))) for q,tq in zip(Q_weights,tQ_weights)]
+update_tQ = [tf.assign(tq, (q * 1e-5 + tq * (1-1e-5))) for q,tq in zip(Q_weights,tQ_weights)]
 #update_tQ = [tf.assign(tq, q) for q,tq in zip(Q_weights,tQ_weights)]
 
 #rho = tf.clip_by_value((pip/Act_pi),1 - PPO_EPSILON , 1 + PPO_EPSILON)
 #rho = tf.clip_by_value((pipt/pip),1 - PPO_EPSILON , 1 + PPO_EPSILON)
 #rho = tf.clip_by_value((pip/pipt),0 , 1 + PPO_EPSILON)
 #rho = tf.log(pip + Act_pi) - tf.log(pip)
-rho = 50
+rho = 10
 
 #PPO_R = tf.reduce_min(tf.concat([tf.expand_dims(Act_R, axis=-1), tf.expand_dims(Act_R * rho, axis=-1)], axis=1), axis=-1)
 #PPO_PL = tf.reduce_mean(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap * Actions4Act_oh)), 2) * rho) 
@@ -213,7 +213,7 @@ while(1):
         # sampling action from Q
         # epsilon greedy
         # actions: [noop, fire, right, left, right fire, left fire] 
-        if (np.random.random() < .05):
+        if (np.random.random() < .02):
         # if Greedy_flag or (np.random.random() < .2):
             A = np.random.randint(4) # exlude right fire and left fire, such combo actions
         else:
@@ -342,7 +342,7 @@ while(1):
             SN = len(Shooting_S)
             #print('SN {}'.format(SN))
             #SR = (R/SN) - REWARD_b * .8
-            tf.clip_by_value(CuReward, 0, 50) # reward clipping
+            #tf.clip_by_value(CuReward, 0, 50) # reward clipping
             SR = CuReward/SN
             #SR = (R)/SN 
             #print('SR {}'.format(SR))
@@ -397,7 +397,7 @@ while(1):
             pass
 
             Sib, Aib, Spib, Rib, piib = [], [], [], [], []
-            for training_loop_cnt in range(3):    
+            for training_loop_cnt in range(5):    
                 random.shuffle(training_buffer)
                 for Spi, Ai, Si, SR, pii in (training_buffer):
                     Sib.append(Si)
@@ -405,11 +405,11 @@ while(1):
                     Spib.append(Spi)
                     #Rib.append(SR - REWARD_b * .2)
                     #Rib.append(SR)
-                    #Rib.append((SR - reward_mean)/reward_std)
+                    #Rib.append((SR - reward_mean * 1.5)/reward_std)
                     Rib.append((SR - reward_lq)/(reward_hq - reward_lq + 0.00000001) * 2 - .2)
                     #Rib.append(SR - reward_hq)
                     piib.append(pii)
-                    if len(Aib) == 64:
+                    if len(Aib) == 32:
                         Loss, _ = sess.run([PL, Opt], 
                                         feed_dict={
                                                 Act_S:np.array(Sib).reshape([-1, 210, 160, 3]),
@@ -452,5 +452,5 @@ while(1):
     print("Epi:{}  Score:{}  Loss:{}  Reward:{}  steps:{}  memory:{}".format(episode, GameScore, Loss, CuReward, steps, len(REPLAY_BUFFER)))
         
     #sess.run(update_tQ)
-    sess.run(update_Q)
+    #sess.run(update_Q)
 pass
