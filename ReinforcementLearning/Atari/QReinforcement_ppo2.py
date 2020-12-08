@@ -70,15 +70,15 @@ def tQ(S):
         #S = tf.layers.Dropout(.5)(S)
         Sf = tf.layers.conv2d(So, 16, [1,1], [1,1], padding='SAME', activation=tf.nn.relu, reuse=False, name='So')
         conv1 = conv2d(So, stride_no=2, name='conv1') #(105, 80)
-        #conv1 = tf.layers.Dropout(.5)(conv1)
+        conv1 = tf.layers.Dropout(.5)(conv1)
         conv2 = conv2d(conv1, stride_no=2, name='conv2') #(53, 40)
-        #conv2 = tf.layers.Dropout(.5)(conv2)
+        conv2 = tf.layers.Dropout(.5)(conv2)
         conv3 = conv2d(conv2, stride_no=2, name='conv3') #(27, 20)
-        #conv3 = tf.layers.Dropout(.5)(conv3)
+        conv3 = tf.layers.Dropout(.5)(conv3)
         conv4 = conv2d(conv3, channel_no=128, stride_no=2, name='conv4') #(14, 10)
-        #conv4 = tf.layers.Dropout(.5)(conv4)
+        conv4 = tf.layers.Dropout(.5)(conv4)
         conv5 = conv2d(conv4, channel_no=256, stride_no=2, name='conv5') #(7, 5)
-        #conv5 = tf.layers.Dropout(.5)(conv5)
+        conv5 = tf.layers.Dropout(.5)(conv5)
         conv6 = conv2d(conv5, channel_no=512, stride_no=2, activation=None, name='conv6') #(4, 3)
         #conv6 = tf.layers.Dropout(.5)(conv6)
 
@@ -91,7 +91,7 @@ def tQ(S):
         #f2 = tf.layers.Dropout(.5)(f2)
         for i in range(5):
             f2 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)(f2) 
-            #f2 = tf.layers.Dropout(.5)(f2)
+            f2 = tf.layers.Dropout(.2)(f2)
             #f2 = tf.keras.layers.LayerNormalization()(f2)
         pass
         f3 = tf.layers.dense(f2, 512, activation=tf.nn.relu)
@@ -409,7 +409,7 @@ while(1):
                     Rib.append((SR - reward_lq)/(reward_hq - reward_lq + 0.00000001) * 2 - .2)
                     #Rib.append(SR - reward_hq)
                     piib.append(pii)
-                    if len(Aib) == 32:
+                    if len(Aib) == 128:
                         Loss, _ = sess.run([PL, Opt], 
                                         feed_dict={
                                                 Act_S:np.array(Sib).reshape([-1, 210, 160, 3]),
