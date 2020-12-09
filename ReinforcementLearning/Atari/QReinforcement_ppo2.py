@@ -168,11 +168,11 @@ PL = tf.reduce_mean(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap 
 #Opt = tf.train.RMSPropOptimizer(1E-4, momentum=.9, centered=False).minimize(PPO_PL, var_list=tQ_weights)
 
 #optimizer = tf.train.MomentumOptimizer(1E-3, momentum=.0)
-optimizer = tf.train.RMSPropOptimizer(1E-4, momentum=.6, decay=.6, centered=True)
+optimizer = tf.train.RMSPropOptimizer(1E-4, momentum=.6, decay=.9, centered=True)
 #gr, va = zip(*optimizer.compute_gradients(PL))
 gr_va = optimizer.compute_gradients(PPO_PL, var_list=Q_weights)
 #gr_va = optimizer.compute_gradients(PL, var_list=Q_weights)
-capped_gvs = [(grad if grad is None else tf.clip_by_norm(grad, clip_norm=15.), var) for grad, var in gr_va]
+capped_gvs = [(grad if grad is None else tf.clip_by_norm(grad, clip_norm=10.), var) for grad, var in gr_va]
 #gr = [None if gr is None else tf.clip_by_norm(grad, 1.) for grad in gr]
 #gr = [grad if gr is None else tf.clip_by_norm(grad, .5) for grad in gr]
 Opt = optimizer.apply_gradients(capped_gvs)
@@ -201,6 +201,8 @@ while(1):
     else:
         Greedy_flag = True 
     pass
+
+    exploration = .05
     while(1):
         steps += 1
     # for step in range(STEP_LIMIT):
@@ -213,7 +215,9 @@ while(1):
         # sampling action from Q
         # epsilon greedy
         # actions: [noop, fire, right, left, right fire, left fire] 
-        if (np.random.random() < .02):
+        exploration *= .99
+        #if (np.random.random() < .05):
+        if (np.random.random() < exploration):
         # if Greedy_flag or (np.random.random() < .2):
             A = np.random.randint(4) # exlude right fire and left fire, such combo actions
         else:
