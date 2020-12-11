@@ -202,7 +202,7 @@ while(1):
         Greedy_flag = True 
     pass
 
-    exploration = .05
+    exploration = .02
     while(1):
         steps += 1
     # for step in range(STEP_LIMIT):
@@ -215,7 +215,9 @@ while(1):
         # sampling action from Q
         # epsilon greedy
         # actions: [noop, fire, right, left, right fire, left fire] 
-        exploration *= .99
+        if exploration > 1E-5:
+            exploration *= .999
+        pass
         #if (np.random.random() < .05):
         if (np.random.random() < exploration):
         # if Greedy_flag or (np.random.random() < .2):
