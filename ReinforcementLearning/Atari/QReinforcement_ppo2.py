@@ -202,7 +202,7 @@ while(1):
         Greedy_flag = True 
     pass
 
-    exploration = .02
+    exploration = .03
     while(1):
         steps += 1
     # for step in range(STEP_LIMIT):
