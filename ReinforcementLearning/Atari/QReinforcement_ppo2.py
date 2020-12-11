@@ -354,6 +354,7 @@ while(1):
             #print('SR {}'.format(SR))
             CURRENT_BUFFER = []
 
+            REWARD_b *= 0.99
             #if REWARD_b < CuReward/len(Shooting_S): #(CuReward/steps): #(GameScore/steps) :
             #if (REWARD_b < CuReward) and OPT_FLAG:
             if (REWARD_b < CuReward):
