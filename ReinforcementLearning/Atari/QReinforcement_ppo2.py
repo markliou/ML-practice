@@ -281,10 +281,15 @@ while(1):
         if finish_flag or (Clives > info['ale.lives']):
             Clives = info['ale.lives']
             # CuReward = ALPHA * CuReward - DIE_PANELTY 
-            # CuReward = 0
+            CuReward = 0
             # CuReward = np.clip(CuReward, 0, None)
             # print('This episode is finished ...')
             A = sess.run(Command_A, feed_dict={Act_S:np.array(Sp).reshape([1, 210, 160, 3])})[0]
+            
+
+            OPT_FLAG = True
+
+
             #Loss, _ = sess.run([PL, Opt], 
             #                   feed_dict={
             #                              Act_S:np.array(S).reshape([-1, 210, 160, 3]),
