@@ -281,7 +281,7 @@ while(1):
         if finish_flag or (Clives > info['ale.lives']):
             Clives = info['ale.lives']
             # CuReward = ALPHA * CuReward - DIE_PANELTY 
-            # CuReward = 0
+            CuReward = 0
             # CuReward = np.clip(CuReward, 0, None)
             # print('This episode is finished ...')
             A = sess.run(Command_A, feed_dict={Act_S:np.array(Sp).reshape([1, 210, 160, 3])})[0]
@@ -357,7 +357,7 @@ while(1):
             #print('SR {}'.format(SR))
             CURRENT_BUFFER = []
 
-            REWARD_b *= 0.99
+            #REWARD_b *= 0.99
             #if REWARD_b < CuReward/len(Shooting_S): #(CuReward/steps): #(GameScore/steps) :
             #if (REWARD_b < CuReward) and OPT_FLAG:
             if (REWARD_b < CuReward):
