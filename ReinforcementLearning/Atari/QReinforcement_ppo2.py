@@ -70,15 +70,15 @@ def tQ(S):
         #S = tf.layers.Dropout(.5)(S)
         Sf = tf.layers.conv2d(So, 16, [1,1], [1,1], padding='SAME', activation=tf.nn.relu, reuse=False, name='So')
         conv1 = conv2d(So, stride_no=2, name='conv1') #(105, 80)
-        #conv1 = tf.layers.Dropout(.5)(conv1)
+        conv1 = tf.layers.Dropout(.5)(conv1)
         conv2 = conv2d(conv1, stride_no=2, name='conv2') #(53, 40)
-        #conv2 = tf.layers.Dropout(.5)(conv2)
+        conv2 = tf.layers.Dropout(.5)(conv2)
         conv3 = conv2d(conv2, stride_no=2, name='conv3') #(27, 20)
-        #conv3 = tf.layers.Dropout(.5)(conv3)
+        conv3 = tf.layers.Dropout(.5)(conv3)
         conv4 = conv2d(conv3, channel_no=128, stride_no=2, name='conv4') #(14, 10)
-        #conv4 = tf.layers.Dropout(.5)(conv4)
+        conv4 = tf.layers.Dropout(.5)(conv4)
         conv5 = conv2d(conv4, channel_no=256, stride_no=2, name='conv5') #(7, 5)
-        #conv5 = tf.layers.Dropout(.5)(conv5)
+        conv5 = tf.layers.Dropout(.5)(conv5)
         conv6 = conv2d(conv5, channel_no=512, stride_no=2, activation=None, name='conv6') #(4, 3)
         #conv6 = tf.layers.Dropout(.5)(conv6)
 
@@ -91,7 +91,7 @@ def tQ(S):
         #f2 = tf.layers.Dropout(.5)(f2)
         for i in range(5):
             f2 = tf.keras.layers.Dense(1024, activation=tf.nn.relu)(f2) 
-            #f2 = tf.layers.Dropout(.5)(f2)
+            f2 = tf.layers.Dropout(.2)(f2)
             #f2 = tf.keras.layers.LayerNormalization()(f2)
         pass
         f3 = tf.layers.dense(f2, 512, activation=tf.nn.relu)
@@ -168,11 +168,11 @@ PL = tf.reduce_mean(tf.pow((Act_R + tf.reduce_max(Act_A) - tf.reduce_max(Act_Ap 
 #Opt = tf.train.RMSPropOptimizer(1E-4, momentum=.9, centered=False).minimize(PPO_PL, var_list=tQ_weights)
 
 #optimizer = tf.train.MomentumOptimizer(1E-3, momentum=.0)
-optimizer = tf.train.RMSPropOptimizer(1E-4, momentum=.6, decay=.6, centered=True)
+optimizer = tf.train.RMSPropOptimizer(1E-4, momentum=.6, decay=.9, centered=True)
 #gr, va = zip(*optimizer.compute_gradients(PL))
 gr_va = optimizer.compute_gradients(PPO_PL, var_list=Q_weights)
 #gr_va = optimizer.compute_gradients(PL, var_list=Q_weights)
-capped_gvs = [(grad if grad is None else tf.clip_by_norm(grad, clip_norm=15.), var) for grad, var in gr_va]
+capped_gvs = [(grad if grad is None else tf.clip_by_norm(grad, clip_norm=10.), var) for grad, var in gr_va]
 #gr = [None if gr is None else tf.clip_by_norm(grad, 1.) for grad in gr]
 #gr = [grad if gr is None else tf.clip_by_norm(grad, .5) for grad in gr]
 Opt = optimizer.apply_gradients(capped_gvs)
@@ -201,6 +201,8 @@ while(1):
     else:
         Greedy_flag = True 
     pass
+
+    exploration = .03
     while(1):
         steps += 1
     # for step in range(STEP_LIMIT):
@@ -213,7 +215,11 @@ while(1):
         # sampling action from Q
         # epsilon greedy
         # actions: [noop, fire, right, left, right fire, left fire] 
-        if (np.random.random() < .02):
+        if exploration > 1E-5:
+            exploration *= .999
+        pass
+        #if (np.random.random() < .05):
+        if (np.random.random() < exploration):
         # if Greedy_flag or (np.random.random() < .2):
             A = np.random.randint(4) # exlude right fire and left fire, such combo actions
         else:
@@ -275,10 +281,13 @@ while(1):
         if finish_flag or (Clives > info['ale.lives']):
             Clives = info['ale.lives']
             # CuReward = ALPHA * CuReward - DIE_PANELTY 
-            # CuReward = 0
+            CuReward = 0
             # CuReward = np.clip(CuReward, 0, None)
             # print('This episode is finished ...')
             A = sess.run(Command_A, feed_dict={Act_S:np.array(Sp).reshape([1, 210, 160, 3])})[0]
+            
+            OPT_FLAG = True
+
             #Loss, _ = sess.run([PL, Opt], 
             #                   feed_dict={
             #                              Act_S:np.array(S).reshape([-1, 210, 160, 3]),
@@ -348,6 +357,7 @@ while(1):
             #print('SR {}'.format(SR))
             CURRENT_BUFFER = []
 
+            #REWARD_b *= 0.99
             #if REWARD_b < CuReward/len(Shooting_S): #(CuReward/steps): #(GameScore/steps) :
             #if (REWARD_b < CuReward) and OPT_FLAG:
             if (REWARD_b < CuReward):
@@ -409,7 +419,7 @@ while(1):
                     Rib.append((SR - reward_lq)/(reward_hq - reward_lq + 0.00000001) * 2 - .2)
                     #Rib.append(SR - reward_hq)
                     piib.append(pii)
-                    if len(Aib) == 32:
+                    if len(Aib) == 128:
                         Loss, _ = sess.run([PL, Opt], 
                                         feed_dict={
                                                 Act_S:np.array(Sib).reshape([-1, 210, 160, 3]),
