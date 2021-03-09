@@ -13,16 +13,6 @@ prngkey = jax.random.PRNGKey(20)
 # 使用just in time (jit) decorator可以加速編譯
 @jax.jit 
 def conv_opt(x, _w):
-    return jax.lax.conv_general_dilated(x, # 設定跟tensorflow一樣。如果原本是NCHW可以用 jax.lax.transpose(x, [0, 3, 1, 2])
-                                        _w, # NHWC對應的HWIO
-                                        [2, 2], # stride，對應為HW。應該是長度為n的tuple
-                                        "SAME", # padding。有"SAME"跟"VALID"
-                                        dimension_numbers=('NHWC','HWIO','NHWC') # 預設為None，對應的就是(‘NCHW’, ‘OIHW’, ‘NCHW’)。
-                                        )
-pass 
-
-def conv2d_relu(x, weights_container, out_channel_no, kernel_size, layer_index = -1):
-    global prngkey
     # background:
     # jax中內建convolution的operator共有目前有兩個:
     # stax : 有比較齊全的神經網路操作，包括dropout等等。但目前還在experimental的模組下 (https://jax.readthedocs.io/en/latest/jax.experimental.stax.html)
@@ -42,66 +32,89 @@ def conv2d_relu(x, weights_container, out_channel_no, kernel_size, layer_index =
     # 4) 說明文件中的 n 定義為會進行"stride"的維度。例如圖像是2D陣列，所以進行convolution的方向會是XY兩個方向，所以
     #    n就等於2。1D convolution只有x方向所以n=1。這種做法讓convolution可以往多維度移動，而input的shape是n+2表示
     #    會多出兩個維度。這兩個維度就是[batch_size, output_channel]
-
-    _w, _x, _b = None, None, None
     
-    if layer_index == -1 : # if the layer is not be built, the weights should be given
+    return jax.lax.conv_general_dilated(x, # 設定跟tensorflow一樣。如果原本是NCHW可以用 jax.lax.transpose(x, [0, 3, 1, 2])
+                                        _w, # NHWC對應的HWIO
+                                        [2, 2], # stride，對應為HW。應該是長度為n的tuple
+                                        "SAME", # padding。有"SAME"跟"VALID"
+                                        dimension_numbers=('NHWC','HWIO','NHWC') # 預設為None，對應的就是(‘NCHW’, ‘OIHW’, ‘NCHW’)。
+                                        )
+pass 
+
+def jax_fcn_init(weights_container, input_tensor_shape, out_channel_nos, kernel_size = 3):
+    global prngkey
+    
+    # _w, _x, _b = None, None, None
+    _x = jax.numpy.ones(input_tensor_shape, dtype=np.float32) # give a dummy array for initialization
+    
+    for out_channel_no in out_channel_nos:
         prngkey, c_prngkey = jax.random.split(prngkey) 
         # create the kernels
-        _in_channel = x.shape[-1] # get the input channel number
-        # rpn_key = jax.random.PRNGKey(np.random.randint(65536))
-        rpn_key = np.random.randint(65536)
-
-        _w = jax.nn.initializers.glorot_uniform()(c_prngkey, [kernel_size, kernel_size, _in_channel, out_channel_no]) # HWIO
-        _x = conv_opt(x, _w)
+        _in_channel = _x.shape[-1] # get the input channel number
+        
+        _w = jax.nn.initializers.glorot_uniform()(c_prngkey, (kernel_size, kernel_size, _in_channel, out_channel_no)) # HWIO
+        _x = conv_opt(_x, _w)
         _b = jax.numpy.zeros(_x.shape) # bias
-
+        
         # storing the weights
-        weights_container.append([_w,_b])
-    else:
-        _w, _b = weights_container[layer_index]
-        _x = conv_opt(x, _w)
+        weights_container.append((np.array(_w),np.array(_b))) 
     pass
     
     return jax.nn.relu(_x + _b)
 pass
 
-def loss(pred, truth): # * remember to give the log_softmax *
+def loss(x, weights_container, truth): # * remember to give the log_softmax *
+    pred = jax_fcn(x, weights_container)
     return jax.numpy.mean(-1 * truth * pred) # negative log-likihood 
 pass 
 
-def one_hot(x):
-    return jax.numpy.array(tf.one_hot(x, 10).numpy().astype('float32'))
+def one_hot(y):
+    return jax.numpy.array(tf.one_hot(y, 10).numpy().astype('float32'))
 pass
+
+
+def jax_fcn(x, weights_container):
+    ## forward computing
+    _x = (jax.numpy.array(x.astype('float32')) / 128.0) -1
+    for weights in weights_container[:-1]:
+        _w, _b = weights
+        _x = conv_opt(_x, _w)
+        _x = jax.nn.relu(_x + _b)
+    pass
+    _w, _b = weights_container[-1]
+    _x = conv_opt(_x, _w)
+    # using max-pooling
+    _x = jax.numpy.reshape(_x, [-1, _x.shape[1] * _x.shape[2], 10])
+    _x = jax.numpy.max(_x, axis=-2)
+    output = jax.nn.log_softmax(_x)
+    #print(output.shape)
+    
+    return output
+pass 
 
 def main():
 
     dataset = tfds.load('mnist',  shuffle_files=True)
     tr, ts = iter(dataset['train'].batch(32).prefetch(1).repeat()), iter(dataset['test'].batch(1).repeat())
     # print("{} {}".format(tr.__next__()['image'].shape, tr.__next__()['label'].shape))
-    tr_c = tr.__next__()
 
     ## build the container for keep the weights
     weights_container = []
-
+    
     ## building the CNN
+    # 建立網路的時候，在subroutine盡量不要放if。if有可能造成計算圖的斷裂。
+    # 因此weight initialization跟forward兩個function盡量分開
     feature_map_nos = [16, 32, 64, 10]
-    # image = tr_c['image'].numpy()
-    image = jax.numpy.ones([1, 28, 28, 1], dtype=np.float32) # give a dummy array for initialization
-    output = (jax.numpy.array(image.astype('float32')) / 128.0) -1
-    for feature_map_no in  feature_map_nos:
-        output = conv2d_relu(output, weights_container, feature_map_no, 3, layer_index = -1)
-    pass 
-    print(output.shape)
-    # using max-pooling 
-    output = jax.numpy.reshape(output, [-1, output.shape[1] * output.shape[2], 10])
-    output = jax.numpy.max(output, axis=-2)
-    output = jax.nn.log_softmax(output)
-    print(output.shape)
+    input_shape = [32, 28, 28, 1]
+    jax_fcn_init(weights_container, input_shape,feature_map_nos, 3)
+    print('weights initialized ...')
 
-    ## training loop!!
-    learning_rate = 1e-4
-
+    # test the forwarding
+    # print(jax_fcn(jax.numpy.ones(input_shape, dtype=np.float32), weights_container))
+    # exit()
+    
+    
+    ##### creating the optimizer #####
     # 1) jax.experimental.optimizer必須要匯入到主命名空間中，所以需要使用到import ... from
     # 2) optimizer物件在呼叫以後會返回三個不同的方法:
     #    2.1) opt_init : 用來初始化optimizer用的方法。這邊需要告訴optimizer要最佳化那些變數。
@@ -113,16 +126,38 @@ def main():
     #    2.3) opt_param: 回傳會被最佳化的weights
     
     ## Create the optimizer, and get the essential objects
-    opt_init, opt_update, get_param = optimizers.adam(learning_rate)
+    learning_rate = 1e-4
+    opt_init, opt_update, opt_get_params = optimizers.momentum(learning_rate, .9)
     
     ## initializing the optimizer, and the the status objects after initialing it
     opt_status = opt_init(weights_container)
+    # print(opt_get_params(opt_status))
+    # exit()
 
-    for training_step in range(5000):
+    ##### training loop #####
+    for training_step in range(10):
+        tr_c = tr.__next__()
+        image, label = tr_c['image'].numpy(), tr_c['label'].numpy()
+        image, label = image.astype('float32'), label.astype('float32')
+        
+        ## computing the loss and gradients
+        current_loss, gradients = jax.value_and_grad(loss)(image, weights_container, one_hot(label))
+        # k = jax.grad(loss)(image, weights_container, one_hot(label))
+        # print(k.shape)
+        # exit()
+        print(gradients.shape)
+        print(loss(image, weights_container, one_hot(label)))
+        # opt_status = opt_update(training_step, gradients, opt_status)
+        weights_container = opt_get_params(opt_status)
 
-        pass 
+        # print(gradients.shape)
+        # print(opt_get_params(opt_status))
+        # exit()
 
-    print(loss(output, one_hot(tr_c['label'])))
+        print('step {} loss:{}'.format(training_step, current_loss))
+    pass 
+
+    
     
 pass 
 
