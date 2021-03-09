@@ -59,20 +59,27 @@ def jax_fcn_init(weights_container, input_tensor_shape, out_channel_nos, kernel_
         # storing the weights
         weights_container.append((np.array(_w),np.array(_b))) 
     pass
-    
-    return jax.nn.relu(_x + _b)
 pass
 
-def loss(x, weights_container, truth): # * remember to give the log_softmax *
+@jax.jit
+def loss(weights_container, x, truth): # * remember to give the log_softmax *
+    # 寫 loss 的需要特別注意，jax在計算gradient的時候會以"輸入第一個參數"作為標的計算梯度。
+    # 也就是如果把 x 放在第一個，這邊就會計算針對 x 的gradient。這邊的task是要針對 weigts，
+    # 所以一定要把 wights_container 放成第一個輸入的參數才會得到正確答案。
     pred = jax_fcn(x, weights_container)
     return jax.numpy.mean(-1 * truth * pred) # negative log-likihood 
+pass 
+
+def accuracy(x, weights_container, truth):
+    pred = np.argmax(jax_fcn(x, weights_container), axis=-1)
+    return(np.mean(np.equal(pred.astype(dtype=np.int8),truth.astype(dtype=np.int8))))
 pass 
 
 def one_hot(y):
     return jax.numpy.array(tf.one_hot(y, 10).numpy().astype('float32'))
 pass
 
-
+@jax.jit
 def jax_fcn(x, weights_container):
     ## forward computing
     _x = (jax.numpy.array(x.astype('float32')) / 128.0) -1
@@ -103,7 +110,7 @@ def main():
     
     ## building the CNN
     # 建立網路的時候，在subroutine盡量不要放if。if有可能造成計算圖的斷裂。
-    # 因此weight initialization跟forward兩個function盡量分開
+    # 因此weight initialization跟forward兩個function盡量分開。這樣也同時可以使用到jit加速。
     feature_map_nos = [16, 32, 64, 10]
     input_shape = [32, 28, 28, 1]
     jax_fcn_init(weights_container, input_shape,feature_map_nos, 3)
@@ -127,7 +134,7 @@ def main():
     
     ## Create the optimizer, and get the essential objects
     learning_rate = 1e-4
-    opt_init, opt_update, opt_get_params = optimizers.momentum(learning_rate, .9)
+    opt_init, opt_update, opt_get_params = optimizers.adam(learning_rate)
     
     ## initializing the optimizer, and the the status objects after initialing it
     opt_status = opt_init(weights_container)
@@ -135,26 +142,21 @@ def main():
     # exit()
 
     ##### training loop #####
-    for training_step in range(10):
-        tr_c = tr.__next__()
+    for training_step in range(5000):
+        tr_c = next(tr)
         image, label = tr_c['image'].numpy(), tr_c['label'].numpy()
         image, label = image.astype('float32'), label.astype('float32')
         
         ## computing the loss and gradients
-        current_loss, gradients = jax.value_and_grad(loss)(image, weights_container, one_hot(label))
-        # k = jax.grad(loss)(image, weights_container, one_hot(label))
-        # print(k.shape)
-        # exit()
-        print(gradients.shape)
-        print(loss(image, weights_container, one_hot(label)))
-        # opt_status = opt_update(training_step, gradients, opt_status)
+        current_loss, gradients = jax.value_and_grad(loss)(weights_container, image, one_hot(label))
+        opt_status = opt_update(training_step, gradients, opt_status)
         weights_container = opt_get_params(opt_status)
-
+        
         # print(gradients.shape)
         # print(opt_get_params(opt_status))
         # exit()
 
-        print('step {} loss:{}'.format(training_step, current_loss))
+        print('step {} loss:{} accuracy:{}'.format(training_step, current_loss, accuracy(image, weights_container, label)))
     pass 
 
     
