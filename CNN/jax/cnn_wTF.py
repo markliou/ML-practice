@@ -102,7 +102,7 @@ pass
 def main():
 
     dataset = tfds.load('mnist',  shuffle_files=True)
-    tr, ts = iter(dataset['train'].batch(32).prefetch(1).repeat()), iter(dataset['test'].batch(1).repeat())
+    tr, ts = iter(dataset['train'].batch(128).prefetch(1).repeat()), iter(dataset['test'].batch(1).repeat())
     # print("{} {}".format(tr.__next__()['image'].shape, tr.__next__()['label'].shape))
 
     ## build the container for keep the weights
@@ -111,7 +111,7 @@ def main():
     ## building the CNN
     # 建立網路的時候，在subroutine盡量不要放if。if有可能造成計算圖的斷裂。
     # 因此weight initialization跟forward兩個function盡量分開。這樣也同時可以使用到jit加速。
-    feature_map_nos = [16, 32, 64, 10]
+    feature_map_nos = [128, 256, 512, 10]
     input_shape = [32, 28, 28, 1]
     jax_fcn_init(weights_container, input_shape,feature_map_nos, 3)
     print('weights initialized ...')
