@@ -76,7 +76,7 @@ def total_correlation(z, mean, logvar):
     qz_prod = tf.math.reduce_sum(tf.math.reduce_logsumexp(qz_prob, axis=1, keepdims=False), axis=1, keepdims=False)
     qz = tf.math.reduce_logsumexp(tf.math.reduce_sum(qz_prob, axis=2, keepdims=False), axis=1, keepdims=False)
     
-    # return tf.math.reduce_mean(tf.abs(qz - qz_prod))
+    # implement 正確，但會出現negative loss。一樣的狀況出現在 https://github.com/YannDubs/disentangling-vae/issues/60
     return tf.math.reduce_mean(qz - qz_prod)
 pass
 
