@@ -75,10 +75,9 @@ def total_correlation(z, mean, logvar):
     
     qz_prod = tf.math.reduce_sum(tf.math.reduce_logsumexp(qz_prob, axis=1, keepdims=False), axis=1, keepdims=False)
     qz = tf.math.reduce_logsumexp(tf.math.reduce_sum(qz_prob, axis=2, keepdims=False), axis=1, keepdims=False)
-    # k = tf.math.reduce_mean(qz_prod - qz)
-    # print(k)
     
-    return tf.math.reduce_mean(tf.abs(qz - qz_prod))
+    # return tf.math.reduce_mean(tf.abs(qz - qz_prod))
+    return tf.math.reduce_mean(qz - qz_prod)
 pass
 
 def main():
