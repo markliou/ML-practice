@@ -10,9 +10,9 @@ def get_mnist_iter(tr_bs=32, ts_bs=32):
     tr, ts = tf.reshape(tr, [-1, 28, 28, 1]), tf.reshape(ts, [-1, 28, 28, 1])
     tr_y, ts_y = tf.reshape(tr_y, [-1, 1]), tf.reshape(ts_y, [-1, 1])
     tr_dataset = tf.data.Dataset.from_tensor_slices({'images':tr, 'labels':tr_y})
-    tr_dataset = tr_dataset.shuffle(train_size).batch(tr_bs, drop_remainder=True)
+    tr_dataset = tr_dataset.shuffle(train_size).batch(tr_bs, drop_remainder=True).repeat()
     ts_dataset = tf.data.Dataset.from_tensor_slices({'images':ts, 'labels':ts_y})
-    ts_dataset = ts_dataset.shuffle(test_size).batch(ts_bs, drop_remainder=True)
+    ts_dataset = ts_dataset.shuffle(test_size).batch(ts_bs, drop_remainder=True).repeat()
     return(tr_dataset.as_numpy_iterator(), ts_dataset.as_numpy_iterator())
 pass 
 
@@ -78,23 +78,8 @@ def total_correlation(z, mean, logvar):
     # k = tf.math.reduce_mean(qz_prod - qz)
     # print(k)
     
-    return tf.math.reduce_mean(qz - qz_prod)
+    return tf.math.reduce_mean(tf.abs(qz - qz_prod))
 pass
-
-def generate_and_save_images(encoder, decoder, step, test_sample):
-    mean, logvar = encoder(test_sample)
-    z = latent_resampling(mean, logvar)
-    predictions = decoder(z)
-    fig = plt.figure(figsize=(4, 4))
-
-    for i in range(predictions.shape[0]):
-        plt.subplot(4, 4, i + 1)
-        plt.imshow(predictions[i, :, :, 0], cmap='gray')
-        plt.axis('off')
-
-    # tight_layout minimizes the overlap between 2 sub-plots
-    plt.savefig('image_at_step_{:04d}.png'.format(step))
-    plt.show()
 
 def main():
     tr_iter, ts_iter = get_mnist_iter()
