@@ -98,6 +98,9 @@ def generate_and_save_images(encoder, decoder, step, test_sample):
 
 def main():
     tr_iter, ts_iter = get_mnist_iter()
+    target = next(ts_iter)['images']
+    target = (target - 128.) / 2.
+
     beta = 5
     # in beta-tcvae, 作者認為KL divergence可以進一步拆成totoal correlation (TC)的關係。因此即使不用normal distribution去擠壓infomraiont，
     # 單靠控制TC狀態也能達到disentagling。原文有進一步使用annealing的方法，並把gamma(陳天奇的程式碼叫做lambda)設定在0~0.95之間，
@@ -126,8 +129,6 @@ def main():
         print('step:{} loss:{}'.format(step, loss().numpy()))
         
         # simpe estimating
-        target = next(ts_iter)['images']
-        target = (target - 128.) / 2.
         mean, logvar = en(target)
         target_ = (de(latent_resampling(mean, logvar))[0] + 128) * 2
         MAE = tf.reduce_mean(tf.math.abs(target_ - target))
