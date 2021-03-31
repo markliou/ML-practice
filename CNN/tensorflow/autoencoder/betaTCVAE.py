@@ -76,7 +76,9 @@ def total_correlation(z, mean, logvar):
     qz_prod = tf.math.reduce_sum(tf.math.reduce_logsumexp(qz_prob, axis=1, keepdims=False), axis=1, keepdims=False)
     qz = tf.math.reduce_logsumexp(tf.math.reduce_sum(qz_prob, axis=2, keepdims=False), axis=1, keepdims=False)
     
-    # implement 正確，但會出現negative loss。一樣的狀況出現在 https://github.com/YannDubs/disentangling-vae/issues/60
+    # implement 正確，但會出現negative loss。一樣的狀況出現在:
+    #  https://github.com/YannDubs/disentangling-vae/issues/60
+    #  https://datascience.stackexchange.com/questions/63976/how-to-estimate-total-correlation-klqz%CE%A0jqzj-of-vae-after-training-usefu
     return tf.math.reduce_mean(qz - qz_prod)
 pass
 
