@@ -81,7 +81,7 @@ def main():
 
     # training process 
     opt = tf.keras.optimizers.RMSprop(learning_rate=1E-4, clipnorm=1)
-    for step in range(5000):
+    for step in range(15000):
         opt.minimize(loss, var_list=[en.trainable_weights, de.trainable_weights])
         print('step:{} loss:{}'.format(step, loss().numpy()))
     pass
