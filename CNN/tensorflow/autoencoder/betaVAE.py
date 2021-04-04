@@ -9,9 +9,9 @@ def get_mnist_iter(tr_bs=32, ts_bs=32):
     tr, ts = tf.reshape(tr, [-1, 28, 28, 1]), tf.reshape(ts, [-1, 28, 28, 1])
     tr_y, ts_y = tf.reshape(tr_y, [-1, 1]), tf.reshape(ts_y, [-1, 1])
     tr_dataset = tf.data.Dataset.from_tensor_slices({'images':tr, 'labels':tr_y})
-    tr_dataset = tr_dataset.shuffle(train_size).batch(tr_bs, drop_remainder=True)
+    tr_dataset = tr_dataset.shuffle(train_size).batch(tr_bs, drop_remainder=True).repeat()
     ts_dataset = tf.data.Dataset.from_tensor_slices({'images':ts, 'labels':ts_y})
-    ts_dataset = ts_dataset.shuffle(test_size).batch(ts_bs, drop_remainder=True)
+    ts_dataset = ts_dataset.shuffle(test_size).batch(ts_bs, drop_remainder=True).repeat()
     return(tr_dataset.as_numpy_iterator(), ts_dataset.as_numpy_iterator())
 pass 
 
@@ -57,12 +57,12 @@ def log_nomral_pdf(z, mean, logvar):
     # f_logvar = tf.keras.layers.Flatten()(logvar)
     log2pi = tf.math.log(2. * np.pi)
     log_pdf = -.5 * (tf.pow((z - mean), 2.) * tf.exp(-logvar) + logvar + log2pi)
-    return tf.reduce_sum(log_pdf)
+    return tf.reduce_mean(log_pdf)
 pass
 
 def main():
     tr_iter, ts_iter = get_mnist_iter()
-    beta = 5
+    beta = 3
     en = AE_encoder()
     de = AE_decoder()
     
@@ -75,12 +75,13 @@ def main():
         e_pdf = log_nomral_pdf(latent, latent_mean, latent_logvar)
         s_pdf = log_nomral_pdf(latent, 0., 0.)
         log_normal_pdf_loss = tf.reduce_mean((e_pdf - s_pdf))
+        tf.keras.preprocessing.image.save_img("encoding_res.jpg", out[0]) # show the image
         return mse(target, out) + beta * log_normal_pdf_loss
     pass
 
     # training process 
     opt = tf.keras.optimizers.RMSprop(learning_rate=1E-4, clipnorm=1)
-    for step in range(500):
+    for step in range(5000):
         opt.minimize(loss, var_list=[en.trainable_weights, de.trainable_weights])
         print('step:{} loss:{}'.format(step, loss().numpy()))
     pass
