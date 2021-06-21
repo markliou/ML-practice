@@ -12,9 +12,8 @@ def affine_coupling_block():
     pass  
 
 def RealNVP(): 
-    pass 
-
-def mask(): 
+    x = tf.keras.Input(shape=[28, 28, 1])
+    
     pass 
 
 def main(): 
