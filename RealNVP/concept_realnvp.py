@@ -1,6 +1,6 @@
 import tensorflow as tf 
 import numpy as np 
-
+import flow_latent_ops as flo
 
 def affine_coupling_block():
 
