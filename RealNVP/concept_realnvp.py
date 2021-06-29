@@ -149,8 +149,13 @@ def main():
 
         if training_iter_step % 1 == 0:
             print("step:{}  loss:{}".format(training_iter_step, loss()))
-            me_tr = tf.map_fn(fn=batchUnsqeeze2DFeatureMap, elems=model_forward(sq_tr)[0], dtype=tf.float32)
-            tf.keras.preprocessing.image.save_img("tr.png", me_tr[0],"channels_last")
+            tr_forward = model_forward(sq_tr)[0]
+            tr_backward = model_backward(tr_forward)
+            tr_forward = tf.map_fn(fn=batchUnsqeeze2DFeatureMap, elems=tr_forward, dtype=tf.float32)
+            tr_backward = tf.map_fn(fn=batchUnsqeeze2DFeatureMap, elems=tr_backward, dtype=tf.float32)
+            tf.keras.preprocessing.image.save_img("tr_forward.png", tr_forward[0],"channels_last")
+            tf.keras.preprocessing.image.save_img("tr_backward.png", tr_backward[0],"channels_last")
+            tf.keras.preprocessing.image.save_img("tr.png", tr['image'][0],"channels_last")
         pass
     pass 
 pass  
