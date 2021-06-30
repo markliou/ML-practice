@@ -69,8 +69,8 @@ def RealNVP_forward(flow_block_no = 32):
     for flow_block in range(1, flow_block_no) :
         logs1, t1, logdet1 = affine_coupling_block(latent2, blocks_logs_1, blocks_t_1, flow_block)
         logs2, t2, logdet2 = affine_coupling_block(latent1, blocks_logs_2, blocks_t_2, flow_block)
-        latent1 = x1 * tf.exp(logs1) + t1
-        latent2 = x2 * tf.exp(logs2) + t2
+        latent1 = latent1 * tf.exp(logs1) + t1
+        latent2 = latent2 * tf.exp(logs2) + t2
         logdet_loss += (logdet1 + logdet2)
         el_loss += (distribution.log_prob(latent1) + distribution.log_prob(latent2))
     pass
@@ -92,8 +92,8 @@ def RealNVP_backward(flow_blocks):
     for flow_block in [b for b in range(1, block_no)[::-1]]:
         logs1, t1, logdet1 = affine_coupling_block(latent2, blocks_logs_1, blocks_t_1, flow_block, forward=False)
         logs2, t2, logdet2 = affine_coupling_block(latent1, blocks_logs_2, blocks_t_2, flow_block, forward=False)
-        latent1 = x1 * tf.exp(logs1) + t1
-        latent2 = x2 * tf.exp(logs2) + t2
+        latent1 = (latent1 - t1) * tf.exp(logs1 * -1)
+        latent2 = (latent2 - t2) * tf.exp(logs2 * -1)
     pass
 
     out = tf.concat([latent1, latent2], axis=-1)
