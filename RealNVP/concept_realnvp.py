@@ -128,7 +128,7 @@ def main():
                                         as_supervised=False,
                                         with_info=False,)
 
-    kmnist_tr = kmnist_tr.batch(batch_size).repeat()
+    kmnist_tr = kmnist_tr.batch(batch_size).repeat().prefetch(4)
     kmnist_tr_iter = iter(kmnist_tr)
 
     # build the RealNVP
