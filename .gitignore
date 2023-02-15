@@ -141,3 +141,6 @@ $RECYCLE.BIN/
 
 # ignore markliou projects
 gazefan/
+
+# ignore the developing byproduct
+ghtk.txts
