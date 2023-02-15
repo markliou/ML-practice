@@ -144,3 +144,4 @@ gazefan/
 
 # ignore the developing byproduct
 ghtk.txt
+frp/*
