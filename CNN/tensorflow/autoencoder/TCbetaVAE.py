@@ -21,13 +21,13 @@ def AE_encoder():
     e1 = tf.keras.layers.Conv2D(16, (3,3), padding="SAME", strides=(2,2), activation=tf.nn.relu)(x) #[14,14]
     e2 = tf.keras.layers.Conv2D(32, (3,3), padding="SAME", strides=(2,2), activation=tf.nn.relu)(e1) #[7,7]
     e3 = tf.keras.layers.Conv2D(64, (3,3), padding="SAME", strides=(2,2), activation=tf.nn.relu)(e2) #[4,4]
-    mean_out = tf.keras.layers.Conv2D(128, (3,3), padding="SAME", strides=(2,2), activation=None)(e3) #[2,2]
-    logvar_out = tf.keras.layers.Conv2D(128, (3,3), padding="SAME", strides=(2,2), activation=None)(e3) #[2,2]
+    mean_out = tf.keras.layers.Conv2D(64, (3,3), padding="SAME", strides=(2,2), activation=None)(e3) #[2,2]
+    logvar_out = tf.keras.layers.Conv2D(64, (3,3), padding="SAME", strides=(2,2), activation=None)(e3) #[2,2]
     return tf.keras.Model(inputs=x, outputs=[mean_out, logvar_out])
 pass 
 
 def AE_decoder():
-    x = tf.keras.Input([2, 2, 128])
+    x = tf.keras.Input([2, 2, 64])
     d1 = tf.keras.layers.Conv2DTranspose(128, (5,5), padding="VALID", strides=(2,2), activation=tf.nn.relu)(x) #[7,7]
     d2 = tf.keras.layers.Conv2DTranspose(64, (3,3), padding="SAME", strides=(2,2), activation=tf.nn.relu)(d1) #[14,14]
     out = tf.keras.layers.Conv2DTranspose(1, (3,3), padding="SAME", strides=(2,2), activation=None)(d2) #[28,28]
@@ -75,9 +75,10 @@ def total_correlation(z, mean, logvar):
     
     qz_prod = tf.math.reduce_sum(tf.math.reduce_logsumexp(qz_prob, axis=1, keepdims=False), axis=1, keepdims=False)
     qz = tf.math.reduce_logsumexp(tf.math.reduce_sum(qz_prob, axis=2, keepdims=False), axis=1, keepdims=False)
-    
+    print(tf.math.reduce_mean(qz - qz_prod))
+
     # return tf.math.reduce_mean(tf.abs(qz - qz_prod))
-    return tf.math.reduce_mean(qz - qz_prod)
+    return tf.math.reduce_mean(qz - qz_prod) * -1
 pass
 
 def main():
@@ -89,7 +90,7 @@ def main():
     # in beta-tcvae, 作者認為KL divergence可以進一步拆成totoal correlation (TC)的關係。因此即使不用normal distribution去擠壓infomraiont，
     # 單靠控制TC狀態也能達到disentagling。原文有進一步使用annealing的方法，並把gamma(陳天奇的程式碼叫做lambda)設定在0~0.95之間，
     # 因此這邊數值不會很大
-    gamma = 1 # shoud between 0 to 1
+    gamma = 5 # shoud between 0 to 1
     en = AE_encoder()
     de = AE_decoder()
     
@@ -108,7 +109,7 @@ def main():
 
     # training process 
     opt = tf.keras.optimizers.RMSprop(learning_rate=1E-4, clipnorm=1)
-    for step in range(500):
+    for step in range(5000):
         opt.minimize(loss, var_list=[en.trainable_weights, de.trainable_weights])
         print('step:{} loss:{}'.format(step, loss().numpy()))
         
