@@ -138,6 +138,9 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
+# windows sync tool config temp files
+sync.ffs_db
+
 
 # ignore markliou projects
 gazefan/
