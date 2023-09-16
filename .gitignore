@@ -141,6 +141,8 @@ $RECYCLE.BIN/
 # windows sync tool config temp files
 sync.ffs_db
 
+# the cursor chat history
+
 
 # ignore markliou projects
 gazefan/
