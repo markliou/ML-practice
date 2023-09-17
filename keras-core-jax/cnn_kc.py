@@ -25,8 +25,25 @@ def cnn():
     
 
 def main():
+    bs = 32
+    opt = kc.optimizers.AdamW(global_clipnorm = 1.0)
+    
+    # learning rate shedule
+    total_steps = 5000
+    decay_steps = 1000
+    warmup_steps = 1000
+    initial_learning_rate = 0.0
+    warmup_target = 1e-4
+    alpha = 2e-6
+    lr = tf.keras.optimizers.schedules.CosineDecay(
+            initial_learning_rate = initial_learning_rate,
+            decay_steps = decay_steps,
+            alpha = alpha,
+            warmup_target = warmup_target,
+            warmup_steps = warmup_steps,
+            )
+    
     model = cnn()
-    print(model.summary())
 
 if __name__ == "__main__":
     main()    
