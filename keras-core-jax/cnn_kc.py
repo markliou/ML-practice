@@ -1,4 +1,5 @@
 import tensorflow as tf 
+import tensorflow_datasets as tfds
 import numpy as np 
 import jax 
 import jax.numpy as jnp
@@ -43,7 +44,15 @@ def main():
             warmup_steps = warmup_steps,
             )
     
+    # creating dataset iterator
+    ds = tfds.load('mnist', split="train", shuffle_files=True)
+    ds = ds.shuffle(1024).batch(32).prefetch(tf.data.AUTOTUNE)
+    
     model = cnn()
+    
+    def loss():
+        pass
+    
 
 if __name__ == "__main__":
     main()    
