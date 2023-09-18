@@ -26,9 +26,17 @@ def cnn():
     fc1 = kc.layers.Dense(512, kc.activations.mish)(flatten)
     fc2 = kc.layers.Dense(256, kc.activations.mish)(fc1)
     out = kc.layers.Dense(10, kc.activations.mish)(fc2)
+    out = kc.layers.Softmax()(out)
     
     return kc.Model(inputs=x, outputs=out)
     
+# loss function: softmax cross entropy
+def loss(cImg, cLab, model):
+    pred = model(cImg)
+    ce = cLab * kc.ops.log(pred)
+    ce = kc.ops.sum(ce, axis=-1)
+    meanCE = kc.ops.mean(ce)
+    return -meanCE
 
 def main():
     bs = 32
@@ -52,7 +60,6 @@ def main():
     # creating dataset iterator
     ds = tfds.load('mnist', split="train", shuffle_files=True)
     ds = ds.shuffle(1024).batch(32).prefetch(tf.data.AUTOTUNE)
-<<<<<<< HEAD
     dsIter = iter(ds)
     
     # call the cnn model
@@ -62,30 +69,18 @@ def main():
     # 解汙方法：把需要用到GPU記憶體的操作都先做完，最後再來宣告optimizer
     opt = kc.optimizers.AdamW(global_clipnorm = 1.0)
     
-    
-    
     # training loop
     for step in range(total_steps):
         # setting the training env variables
-        # opt.lr = lRFn(step)
+        opt.lr = lRFn(step)
         dsFetcher = next(dsIter)
         cImg = (tf.cast(dsFetcher['image'], tf.float32) - 128) / 128
-        cLab = dsFetcher['label']
-        print(model(cImg))
-        exit()
+        cLab = jax.nn.one_hot(dsFetcher['label'].numpy(), 10)
         
-        # def loss():
-        #     # pred = model(cImg)
-        #     print(cImg)
-        #     exit()
-        #     pass
-=======
-    
-    model = cnn()
-    
-    def loss():
-        pass
->>>>>>> 8a6a7ecf8fab16a3f827c5147db994de52629c40
+        
+        
+        print(loss())
+        exit()
     
 
 if __name__ == "__main__":
