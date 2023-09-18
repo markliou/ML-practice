@@ -52,6 +52,7 @@ def main():
     # creating dataset iterator
     ds = tfds.load('mnist', split="train", shuffle_files=True)
     ds = ds.shuffle(1024).batch(32).prefetch(tf.data.AUTOTUNE)
+<<<<<<< HEAD
     dsIter = iter(ds)
     
     # call the cnn model
@@ -78,6 +79,13 @@ def main():
         #     print(cImg)
         #     exit()
         #     pass
+=======
+    
+    model = cnn()
+    
+    def loss():
+        pass
+>>>>>>> 8a6a7ecf8fab16a3f827c5147db994de52629c40
     
 
 if __name__ == "__main__":
