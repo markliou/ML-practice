@@ -65,11 +65,17 @@ def main():
     # call the cnn model
     model = cnn()
     
-    # jax 作為backend，在keras core會把GPU記憶體損耗光，目前原因未知。
+    # jax 作為backend，在keras core會把GPU記憶體損耗光，目前原因未知。(v0.1.5, v0.1.6)
     # 解汙方法：把需要用到GPU記憶體的操作都先做完，最後再來宣告optimizer
     opt = kc.optimizers.AdamW(global_clipnorm = 1.0)
     
     # training loop
+    # 1. 模型訓練時，會有trainable與non-trainable parameter，差別在於update時，是否會有梯度流入。
+    # 2. non-trainable並非不會被updated。最明顯的例子就是batch normalization有2個non-trainable parameters，分別是
+    #   平均值和標準差。但是每次在計算的時候，會透過moving average進行updating，而不是使用梯度。
+    # 3. stateless的fucntion，每次運算時需要把trainable和non-trainable都一起注入到optimizor。原因就是non-trainable
+    #    variables有可能還是會在inferencing過程中被updated。 
+    
     for step in range(total_steps):
         # setting the training env variables
         opt.lr = lRFn(step)
@@ -77,9 +83,14 @@ def main():
         cImg = (tf.cast(dsFetcher['image'], tf.float32) - 128) / 128
         cLab = jax.nn.one_hot(dsFetcher['label'].numpy(), 10)
         
+        # jax需要先透過grad函數包裝loss函數，再透過第二段傳遞變數
+        grad_fn = jax.value_and_grad(loss) # 使用jax.grad只會給出梯度。使用value_and_grad會同時給出梯度跟loss。
+        grads = grad_fn(cImg, cLab, model)
+        
+        # apply the gradients
+        opt.apply_gradients(grads)
         
         
-        print(loss())
         exit()
     
 
