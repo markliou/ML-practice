@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import os
 os.environ["KERAS_BACKEND"] = "jax"
 
-import keras_core as kc
+import keras_core as kc  # noqa: E402
 
 # limited the gpu memory usage when TF working
 gpus = tf.config.list_physical_devices('GPU')
@@ -29,37 +29,29 @@ def cnn():
     out = kc.layers.Softmax()(out)
     
     return kc.Model(inputs=x, outputs=out)
-    
-# loss function: softmax cross entropy
-def loss(cImg, cLab, model):
-    pred = model(cImg)
-    ce = cLab * kc.ops.log(pred)
-    ce = kc.ops.sum(ce, axis=-1)
-    meanCE = kc.ops.mean(ce)
-    return -meanCE
 
 def main():
     bs = 32
     # opt = kc.optimizers.AdamW(global_clipnorm = 1.0)
     
     # learning rate shedule
-    total_steps = 5000
-    decay_steps = 1000
-    warmup_steps = 1000
-    initial_learning_rate = 0.0
-    warmup_target = 1e-4
+    totalSteps = 5000
+    decaySteps = 1000
+    warmupSteps = 1000
+    initialLearningRate = 0.0
+    warmupTarget = 1e-4
     alpha = 2e-6
-    lRFn = tf.keras.optimizers.schedules.CosineDecay(
-            initial_learning_rate = initial_learning_rate,
-            decay_steps = decay_steps,
+    learningRateSchedules = tf.keras.optimizers.schedules.CosineDecay(
+            initial_learning_rate = initialLearningRate,
+            decay_steps = decaySteps,
             alpha = alpha,
-            warmup_target = warmup_target,
-            warmup_steps = warmup_steps
+            warmup_target = warmupTarget,
+            warmup_steps = warmupSteps
             )
     
     # creating dataset iterator
     ds = tfds.load('mnist', split="train", shuffle_files=True)
-    ds = ds.shuffle(1024).batch(32).prefetch(tf.data.AUTOTUNE)
+    ds = ds.shuffle(1024).batch(32).repeat().prefetch(tf.data.AUTOTUNE)
     dsIter = iter(ds)
     
     # call the cnn model
@@ -70,28 +62,74 @@ def main():
     opt = kc.optimizers.AdamW(global_clipnorm = 1.0)
     
     # training loop
-    # 1. 模型訓練時，會有trainable與non-trainable parameter，差別在於update時，是否會有梯度流入。
-    # 2. non-trainable並非不會被updated。最明顯的例子就是batch normalization有2個non-trainable parameters，分別是
-    #   平均值和標準差。但是每次在計算的時候，會透過moving average進行updating，而不是使用梯度。
-    # 3. stateless的fucntion，每次運算時需要把trainable和non-trainable都一起注入到optimizor。原因就是non-trainable
-    #    variables有可能還是會在inferencing過程中被updated。 
+    # 1. 模型訓練時，會有trainable與non-trainable parameter，差別在於update時，是否會
+    #    有梯 度流入。
+    # 2. non-trainable並非不會被updated。最明顯的例子就是batch normalization有2個
+    #    non-trainable parameters，分別是
+    #   平均值和標準差。但是每次在計算的時候，會透過moving average進行updating，而不是
+    #    使用梯度。
+    # 3. stateless的fucntion，每次運算時需要把trainable和non-trainable都一起注入到
+    #    optimizor。原因就是non-trainable variables有可能還是會在inferencing過程中被
+    #    updated。 
     
-    for step in range(total_steps):
-        # setting the training env variables
-        opt.lr = lRFn(step)
-        dsFetcher = next(dsIter)
-        cImg = (tf.cast(dsFetcher['image'], tf.float32) - 128) / 128
-        cLab = jax.nn.one_hot(dsFetcher['label'].numpy(), 10)
+    # define the cross-entropy as loss
+    # by using the stateless calling
+    def compute_loss(trainableVars, nonTrainableVars, img, lab):
+        # 如果確認每一個non-trainable variable都不會更動，應該可以直接使用model計算。
+        # 但模型中有non-trainable variable，而且該non-trainable variables會被updated，
+        # 就需要用statless來回傳已經被updated的non-trainable variables。
+        # 換句話說，使用stateless calling的寫法，泛用性比直接呼叫大很多。
+        #
+        # stateless function 在 Keras core 有三種。詳細狀況可參閱:
+        # https://keras.io/keras_core/announcement/
         
-        # jax需要先透過grad函數包裝loss函數，再透過第二段傳遞變數
-        grad_fn = jax.value_and_grad(loss) # 使用jax.grad只會給出梯度。使用value_and_grad會同時給出梯度跟loss。
-        grads = grad_fn(cImg, cLab, model)
-        
-        # apply the gradients
-        opt.apply_gradients(grads)
-        
-        
+        predOutput, updatedNonTrainableVars = model.stateless_call(trainableVars, nonTrainableVars, img)  # noqa: E501
+        pred = predOutput[0]
+        print(updatedNonTrainableVars)
         exit()
+        ce = lab * kc.ops.log(pred)
+        ce = kc.ops.sum(ce, axis=-1)
+        meanCE = kc.ops.mean(ce)
+        loss = -meanCE
+        return loss, updatedNonTrainableVars
+    
+    grad_fn = jax.value_and_grad(compute_loss, has_aux=True) # 使用jax.value_and_grad的has_aux=True，才能取得non-trainable參數的結果  # noqa: E501
+    
+    # define the training step
+    # @jax.jit
+    def trainer(state, img, lab):
+        trainableVars, nonTrainableVars, optVars = state
+        (loss, nonTrainableVars), grads = grad_fn(trainableVars, nonTrainableVars, img, lab)  # noqa: E501
+        trainableVars, optVars = opt.stateless_apply(grads, trainableVars, optVars)
+        return loss, (trainableVars, nonTrainableVars, optVars)
+    
+    # training loop
+    opt.build(model.trainable_variables)
+    trainableVars = model.trainable_variables
+    nonTrainableVars = model.non_trainable_variables
+    optVars = opt.variables
+    state = (trainableVars, nonTrainableVars, optVars)
+    
+    for step in range(totalSteps):
+        # setting the training env variables
+        dsFetcher = next(dsIter)
+        cImg = (tf.cast(dsFetcher['image'], tf.float32).numpy() - 128) / 128
+        cLab = jax.nn.one_hot(dsFetcher['label'].numpy(), 10)
+        opt.lr = learningRateSchedules(step)
+        
+        # print(cImg)
+        # print(cLab)
+        # print(opt.lr)
+        # print(model(cImg))
+        # exit()
+        
+        
+        # training 
+        loss, state = trainer(state, cImg, cLab)
+        exit()
+        
+        
+        
     
 
 if __name__ == "__main__":
