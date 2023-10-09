@@ -5,7 +5,7 @@ import numpy as np
 def get_mnist_iter(tr_bs=32, ts_bs=32):
     train_size = 60000
     test_size = 10000
-    (tr, tr_y), (ts, ts_y) = tf.keras.datasets.mnist.load_data()
+    (tr, tr_y), (ts, ts_y) = tf.keras.datasets.fashion_mnist.load_data()
     tr, ts = tf.reshape(tr, [-1, 28, 28, 1]), tf.reshape(ts, [-1, 28, 28, 1])
     tr_y, ts_y = tf.reshape(tr_y, [-1, 1]), tf.reshape(ts_y, [-1, 1])
     tr_dataset = tf.data.Dataset.from_tensor_slices({'images':tr, 'labels':tr_y})
@@ -16,23 +16,20 @@ def get_mnist_iter(tr_bs=32, ts_bs=32):
 pass 
 
 def CNN(amp = 1):
+    # initializer = tf.keras.initializers.RandomNormal(mean=0., stddev=1.)
+    initializer = tf.keras.initializers.RandomNormal()
     x = tf.keras.Input([28, 28, 1])
-    e1 = tf.keras.layers.Conv2D(16 * amp, (3,3), padding="SAME", strides=(2,2), activation=tf.nn.relu)(x) #[14,14]
-    e1 = tf.keras.layers.Conv2D(16 * amp, (3,3), padding="SAME", strides=(1,1), activation=tf.nn.relu)(e1) #[14,14]
-    e1 = tf.keras.layers.Conv2D(16 * amp, (3,3), padding="SAME", strides=(1,1), activation=tf.nn.relu)(e1) #[14,14]
-    e2 = tf.keras.layers.Conv2D(32 * amp, (3,3), padding="SAME", strides=(2,2), activation=tf.nn.relu)(e1) #[7,7]
-    e2 = tf.keras.layers.Conv2D(32 * amp, (3,3), padding="SAME", strides=(1,1), activation=tf.nn.relu)(e2) #[7,7]
-    e2 = tf.keras.layers.Conv2D(32 * amp, (3,3), padding="SAME", strides=(1,1), activation=tf.nn.relu)(e2) #[7,7]
-    e3 = tf.keras.layers.Conv2D(64 * amp, (3,3), padding="SAME", strides=(2,2), activation=tf.nn.relu)(e2) #[4,4]
-    e3 = tf.keras.layers.Conv2D(64 * amp, (3,3), padding="SAME", strides=(1,1), activation=tf.nn.relu)(e3) #[4,4]
-    e3 = tf.keras.layers.Conv2D(64 * amp, (3,3), padding="SAME", strides=(1,1), activation=tf.nn.relu)(e3) #[4,4]
     
-    fc = tf.keras.layers.Flatten()(e3)
-    fc1 = tf.keras.layers.Dense(128 * amp, activation=tf.nn.relu)(fc)
-    fc2 = tf.keras.layers.Dense(64 * amp, activation=tf.nn.relu)(fc1)
-    fc3 = tf.keras.layers.Dense(32 * amp, activation=tf.nn.relu)(fc2)
+    fc = tf.keras.layers.Flatten()(x)
+    fc1 = tf.keras.layers.Dense(16 * amp ,kernel_initializer=initializer, bias_initializer=initializer, activation=tf.nn.relu)(fc)
+    fc2 = tf.keras.layers.Dense(32 * amp ,kernel_initializer=initializer, bias_initializer=initializer, activation=tf.nn.relu)(fc1)
+    # fc3 = tf.keras.layers.Dense(64 * amp , activation=tf.nn.tanh)(fc2)
     
-    out = tf.keras.layers.Dense(10, activation=tf.nn.softmax)(fc3)
+    # # amp layers
+    # for i in range((amp - 1) * 2):
+    #     fc3 = tf.keras.layers.Dense(128, activation=tf.nn.tanh)(fc3)
+    
+    out = tf.keras.layers.Dense(10,kernel_initializer=initializer, bias_initializer=initializer, activation=tf.nn.softmax)(fc2)
     
     return tf.keras.Model(inputs=x, outputs=out)
 pass 
@@ -42,27 +39,61 @@ def ce(y, _y):
 pass 
 
 def main():
-    bs = 256
-    tr_iter, ts_iter = get_mnist_iter(bs,bs)
-    loss_stop_threshold = 5E-2
-    amp = 2 # 神經網路參數放大倍率
+    bs = 1024
+    tr_iter, ts_iter = get_mnist_iter(bs, 10000)
+    loss_stop_threshold = 1E-3
+    amp = 1 # 神經網路參數放大倍率，ZBD14最多到6
     cnn = CNN(amp)
+    early_stop = 10
     
+    # try to train the model to overfitting
+    fetcher = next(tr_iter)
+    target, label = fetcher['images'], fetcher['labels']
+    target = (target - 128.) / 256.
+    label = tf.reshape(label, [-1])
+    
+    @tf.function
     def loss():
-        fetcher = next(tr_iter)
-        target, label = fetcher['images'], fetcher['labels']
-        target = (target - 128.) / 2.
-        label = tf.reshape(label, [-1])
         out = cnn(target)
         return ce(label, out)
 
     # training process 
+    # opt = tf.keras.optimizers.experimental.SGD(learning_rate=1E-3, momentum=0.9, clipnorm=1)
     opt = tf.keras.optimizers.AdamW(learning_rate=1E-4, clipnorm=1)
     step = 0
-    while loss() > loss_stop_threshold:
+    # while early_stop > 0:
+    while step < 5000:
         step += 1
+        # fetcher = next(tr_iter)
+        # target, label = fetcher['images'], fetcher['labels']
+        # target = (target - 128.) / 256.
+        # label = tf.reshape(label, [-1])
         opt.minimize(loss, var_list=cnn.trainable_weights)
-        print('step:{} loss:{}'.format(step, loss().numpy()))
+        c_loss = loss().numpy()
+        if step % 100 == 0:
+            print('step:{} loss:{}'.format(step, c_loss))
+        if c_loss < loss_stop_threshold:
+            early_stop -= 1
+        
+    # test process
+    def show_acc(target, label):
+        label = tf.reshape(label, [-1])
+        out = tf.math.argmax(cnn(target), axis=-1)
+        acc = tf.keras.metrics.Accuracy()
+        acc.update_state(out, label)
+        print("accuracy:{}".format(acc.result().numpy()))
+    
+    # fetcher = next(tr_iter)
+    # target, label = fetcher['images'], fetcher['labels']
+    # target = (target - 128.) / 256.
+    print("training:")
+    show_acc(target, label)
+    
+    fetcher = next(ts_iter)
+    target, label = fetcher['images'], fetcher['labels']
+    target = (target - 128.) / 256.
+    print("test:")
+    show_acc(target, label)
 
 
 
