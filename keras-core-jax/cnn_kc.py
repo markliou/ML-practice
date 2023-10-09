@@ -84,13 +84,14 @@ def main():
         # https://keras.io/keras_core/announcement/
         
         predOutput, updatedNonTrainableVars = model.stateless_call(trainableVars, nonTrainableVars, img)  # noqa: E501
-        pred = predOutput[0]
-        print(updatedNonTrainableVars)
-        exit()
-        ce = lab * kc.ops.log(pred)
-        ce = kc.ops.sum(ce, axis=-1)
-        meanCE = kc.ops.mean(ce)
-        loss = -meanCE
+        # pred = predOutput.primal
+        # ce = lab * kc.ops.log(pred)
+        # ce = kc.ops.sum(ce, axis=-1)
+        # meanCE = kc.ops.mean(ce)
+        # loss = -meanCE
+        
+        loss = kc.losses.CategoricalCrossentropy(from_logits=False)(lab, predOutput)
+        
         return loss, updatedNonTrainableVars
     
     grad_fn = jax.value_and_grad(compute_loss, has_aux=True) # 使用jax.value_and_grad的has_aux=True，才能取得non-trainable參數的結果  # noqa: E501
@@ -98,10 +99,10 @@ def main():
     # define the training step
     # @jax.jit
     def trainer(state, img, lab):
-        trainableVars, nonTrainableVars, optVars = state
-        (loss, nonTrainableVars), grads = grad_fn(trainableVars, nonTrainableVars, img, lab)  # noqa: E501
-        trainableVars, optVars = opt.stateless_apply(grads, trainableVars, optVars)
-        return loss, (trainableVars, nonTrainableVars, optVars)
+        sTrainableVars, sNonTrainableVars, sOptVars = state
+        (loss, sNonTrainableVars), grads = grad_fn(sTrainableVars, sNonTrainableVars, img, lab)  # noqa: E501
+        sTrainableVars, sOptVars = opt.stateless_apply(grads, sTrainableVars, sOptVars)
+        return loss, (sTrainableVars, sNonTrainableVars, sOptVars)
     
     # training loop
     opt.build(model.trainable_variables)
@@ -116,13 +117,6 @@ def main():
         cImg = (tf.cast(dsFetcher['image'], tf.float32).numpy() - 128) / 128
         cLab = jax.nn.one_hot(dsFetcher['label'].numpy(), 10)
         opt.lr = learningRateSchedules(step)
-        
-        # print(cImg)
-        # print(cLab)
-        # print(opt.lr)
-        # print(model(cImg))
-        # exit()
-        
         
         # training 
         loss, state = trainer(state, cImg, cLab)
