@@ -16,18 +16,12 @@ def get_mnist_iter(tr_bs=32, ts_bs=32):
 pass 
 
 def CNN(amp = 1):
-    # initializer = tf.keras.initializers.RandomNormal(mean=0., stddev=1.)
     initializer = tf.keras.initializers.RandomNormal()
     x = tf.keras.Input([28, 28, 1])
     
     fc = tf.keras.layers.Flatten()(x)
     fc1 = tf.keras.layers.Dense(16 * amp ,kernel_initializer=initializer, bias_initializer=initializer, activation=tf.nn.relu)(fc)
     fc2 = tf.keras.layers.Dense(32 * amp ,kernel_initializer=initializer, bias_initializer=initializer, activation=tf.nn.relu)(fc1)
-    # fc3 = tf.keras.layers.Dense(64 * amp , activation=tf.nn.tanh)(fc2)
-    
-    # # amp layers
-    # for i in range((amp - 1) * 2):
-    #     fc3 = tf.keras.layers.Dense(128, activation=tf.nn.tanh)(fc3)
     
     out = tf.keras.layers.Dense(10,kernel_initializer=initializer, bias_initializer=initializer, activation=tf.nn.softmax)(fc2)
     
@@ -42,7 +36,7 @@ def main():
     bs = 1024
     tr_iter, ts_iter = get_mnist_iter(bs, 10000)
     loss_stop_threshold = 1E-3
-    amp = 1 # 神經網路參數放大倍率，ZBD14最多到6
+    amp = 1 # 神經網路參數放大倍率，建議使用1、10、100比較容易看出差距
     cnn = CNN(amp)
     early_stop = 10
     
@@ -58,16 +52,11 @@ def main():
         return ce(label, out)
 
     # training process 
-    # opt = tf.keras.optimizers.experimental.SGD(learning_rate=1E-3, momentum=0.9, clipnorm=1)
     opt = tf.keras.optimizers.AdamW(learning_rate=1E-4, clipnorm=1)
     step = 0
     # while early_stop > 0:
     while step < 5000:
         step += 1
-        # fetcher = next(tr_iter)
-        # target, label = fetcher['images'], fetcher['labels']
-        # target = (target - 128.) / 256.
-        # label = tf.reshape(label, [-1])
         opt.minimize(loss, var_list=cnn.trainable_weights)
         c_loss = loss().numpy()
         if step % 100 == 0:
@@ -83,9 +72,6 @@ def main():
         acc.update_state(out, label)
         print("accuracy:{}".format(acc.result().numpy()))
     
-    # fetcher = next(tr_iter)
-    # target, label = fetcher['images'], fetcher['labels']
-    # target = (target - 128.) / 256.
     print("training:")
     show_acc(target, label)
     
@@ -99,4 +85,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-pass 
