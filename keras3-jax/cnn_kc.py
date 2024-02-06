@@ -7,6 +7,8 @@ import jax.numpy as jnp
 # change the backend of keras to jax
 import os
 os.environ["KERAS_BACKEND"] = "jax"
+os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
+
 
 import keras as k  # noqa: E402
 
@@ -23,7 +25,7 @@ def cnn():
     c2 = k.layers.Conv2D(32, (3, 3), padding="same",
                          activation=k.activations.elu)(c1)
 
-    flatten = kc.layers.Flatten()(c2)
+    flatten = k.layers.Flatten()(c2)
 
     fc1 = k.layers.Dense(512, k.activations.mish)(flatten)
     fc2 = k.layers.Dense(256, k.activations.mish)(fc1)
