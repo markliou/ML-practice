@@ -151,3 +151,4 @@ gazefan/
 ghtk.txt
 *.vscode*
 frp/
+.keras
