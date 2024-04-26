@@ -16,7 +16,7 @@ for _ in range(1000):
     observation, reward, terminated, truncated, info = env.step(
         env.action_space.sample())
 
-    print("sample:{} , reward:{}".format(env.action_space.sample(), reward))
+    print(f"sample:{env.action_space.sample()} , reward:{reward}")
 
     if terminated or truncated:
         observation, info = env.reset()
