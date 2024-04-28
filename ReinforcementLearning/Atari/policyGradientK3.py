@@ -147,7 +147,7 @@ def main():
     ag = agent()
     env = atari_trainer(ag)
 
-    for i in range(10):
+    while (1):
         env.sampling()
         env.agent_learning()
 
