@@ -34,9 +34,10 @@ class atari_trainer():
         self.env = gym.make('SpaceInvaders-v4')
         # self.env = gym.make('SpaceInvaders-v4', render_mode='human')
         self.gameOverTag = False
-        self.samplingEpisodes = 10
+        self.samplingEpisodes = 3
         self.greedy = .2
         self.bs = 128
+        self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
         self.replayBuffer = []
 
@@ -110,18 +111,31 @@ class atari_trainer():
             bsCounter += 1
             state = self.replayBuffer[i]
             obvStack.append(state[0])
-            rewardStack.append(state[1])
+            rewardStack.append(tf.cast(state[1], tf.float32))
             actionStack.append(state[2])
 
             # policy gradient training
             if (bsCounter == self.bs):
                 obvStack = tf.stack(obvStack, axis=0)
                 rewardStack = tf.stack(rewardStack, axis=0)
-                actionStack = tf.stack(actionStack, axis=0)
+                actionStack = tf.one_hot(tf.stack(actionStack, axis=0), 6)
 
-                with tf.GradientTape() as grad:
-                    predicts = self.agent(obvStack)
-                    loss = k.losses.SparseCategoricalCrossentropy()
+                @tf.function(reduce_retracing=True)
+                def update_agent_weights():
+                    with tf.GradientTape() as grad:
+                        predicts = self.agent(obvStack)
+                        ce = tf.reduce_sum(
+                            actionStack * -tf.math.log(predicts + 1e-6), axis=-1)
+                        policy_ce = tf.reduce_mean(rewardStack * ce)
+
+                    gradients = grad.gradient(
+                        policy_ce, self.agent.trainable_variables)
+                    self.optimizer.apply(
+                        gradients, self.agent.trainable_variables)
+
+                    return policy_ce
+
+                print(f"loss:{update_agent_weights()}")
 
                 bsCounter = 0
                 obvStack = []
