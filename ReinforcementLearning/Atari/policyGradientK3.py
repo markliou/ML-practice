@@ -54,7 +54,7 @@ class atari_trainer():
             observation = (np.array(observation) - 128.0)/256.0
 
             # greedy sampling
-            if np.random.random() > self.greedy:
+            if np.random.random() < self.greedy:
                 action = self.env.action_space.sample()
             else:
                 action = np.argmax(self.agent(
