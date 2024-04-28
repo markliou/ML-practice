@@ -34,7 +34,7 @@ class atari_trainer():
         self.env = gym.make('SpaceInvaders-v4')
         # self.env = gym.make('SpaceInvaders-v4', render_mode='human')
         self.gameOverTag = False
-        self.samplingEpisodes = 3
+        self.samplingEpisodes = 30
         self.greedy = .2
         self.bs = 128
         self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
@@ -146,8 +146,10 @@ class atari_trainer():
 def main():
     ag = agent()
     env = atari_trainer(ag)
-    env.sampling()
-    env.agent_learning()
+
+    for i in range(10):
+        env.sampling()
+        env.agent_learning()
 
 
 if __name__ == "__main__":
