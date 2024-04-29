@@ -95,7 +95,7 @@ class atari_trainer():
             if (accumulatedReward != 0.0):
                 self.replayBuffer.append(
                     (observation, accumulatedReward, action))
-            if (len(rewardBuffer) > self.bs * 5000):
+            if (len(self.replayBuffer) > self.bs * 30):
                 self.replayBuffer.pop(0)
 
     def agent_learning(self):
