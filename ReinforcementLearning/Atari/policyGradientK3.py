@@ -124,9 +124,17 @@ class atari_trainer():
                 def update_agent_weights():
                     with tf.GradientTape() as grad:
                         predicts = self.agent(obvStack)
+
+                        # importance sampling
+                        under = tf.math.reduce_max(predicts, axis=-1)
+                        upper = tf.math.reduce_max(
+                            predicts * actionStack, axis=-1)
+                        iSampling = upper/under
+
                         ce = tf.reduce_sum(
                             actionStack * -tf.math.log(predicts + 1e-6), axis=-1)
-                        policy_ce = tf.reduce_mean(rewardStack * ce)
+                        policy_ce = tf.reduce_mean(
+                            rewardStack * ce * iSampling)
 
                     gradients = grad.gradient(
                         policy_ce, self.agent.trainable_variables)
