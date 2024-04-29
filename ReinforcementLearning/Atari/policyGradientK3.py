@@ -35,7 +35,7 @@ class atari_trainer():
         # self.env = gym.make('SpaceInvaders-v4', render_mode='human')
         self.gameOverTag = False
         self.samplingEpisodes = 30
-        self.greedy = .2
+        self.greedy = .5
         self.bs = 128
         self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
@@ -48,17 +48,21 @@ class atari_trainer():
         observation = (np.array(observation) - 128.0)/256.0
         rewardBuffer = []  # the reward of an action will be counted for 30 steps
         cLives = info['lives']
+        self.greedy *= .99
+        self.greedy = max(self.greedy, 0.02)
 
         while (cEpi < self.samplingEpisodes):
 
             observation = (np.array(observation) - 128.0)/256.0
 
             # greedy sampling
-            if np.random.random() > self.greedy:
+            if np.random.random() < self.greedy:
                 action = self.env.action_space.sample()
             else:
                 action = np.argmax(self.agent(
                     tf.reshape(observation, [1, 210, 160, 3])))
+
+            # print(f"action: {action}")
 
             # interaction with atari
             observation, reward, terminated, truncated, info = self.env.step(
@@ -95,7 +99,7 @@ class atari_trainer():
             if (accumulatedReward != 0.0):
                 self.replayBuffer.append(
                     (observation, accumulatedReward, action))
-            if (len(rewardBuffer) > self.bs * 5000):
+            if (len(self.replayBuffer) > self.bs * 30):
                 self.replayBuffer.pop(0)
 
     def agent_learning(self):
@@ -124,9 +128,17 @@ class atari_trainer():
                 def update_agent_weights():
                     with tf.GradientTape() as grad:
                         predicts = self.agent(obvStack)
+
+                        # importance sampling
+                        under = tf.math.reduce_max(predicts, axis=-1)
+                        upper = tf.math.reduce_max(
+                            predicts * actionStack, axis=-1)
+                        iSampling = upper/under
+
                         ce = tf.reduce_sum(
                             actionStack * -tf.math.log(predicts + 1e-6), axis=-1)
-                        policy_ce = tf.reduce_mean(rewardStack * ce)
+                        policy_ce = tf.reduce_mean(
+                            rewardStack * ce * tf.stop_gradient(iSampling))
 
                     gradients = grad.gradient(
                         policy_ce, self.agent.trainable_variables)
