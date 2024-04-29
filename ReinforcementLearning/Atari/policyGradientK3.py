@@ -31,8 +31,8 @@ def agent():
 
 class atari_trainer():
     def __init__(self, agent):
-        # self.env = gym.make('SpaceInvaders-v4')
-        self.env = gym.make('SpaceInvaders-v4', render_mode='human')
+        self.env = gym.make('SpaceInvaders-v4')
+        # self.env = gym.make('SpaceInvaders-v4', render_mode='human')
         self.gameOverTag = False
         self.samplingEpisodes = 30
         self.greedy = .5
@@ -49,6 +49,7 @@ class atari_trainer():
         rewardBuffer = []  # the reward of an action will be counted for 30 steps
         cLives = info['lives']
         self.greedy *= .99
+        self.greedy = max(self.greedy, 0.02)
 
         while (cEpi < self.samplingEpisodes):
 
@@ -60,6 +61,8 @@ class atari_trainer():
             else:
                 action = np.argmax(self.agent(
                     tf.reshape(observation, [1, 210, 160, 3])))
+
+            # print(f"action: {action}")
 
             # interaction with atari
             observation, reward, terminated, truncated, info = self.env.step(
@@ -135,7 +138,7 @@ class atari_trainer():
                         ce = tf.reduce_sum(
                             actionStack * -tf.math.log(predicts + 1e-6), axis=-1)
                         policy_ce = tf.reduce_mean(
-                            rewardStack * ce * iSampling)
+                            rewardStack * ce * tf.stop_gradient(iSampling))
 
                     gradients = grad.gradient(
                         policy_ce, self.agent.trainable_variables)
