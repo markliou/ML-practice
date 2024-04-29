@@ -31,11 +31,11 @@ def agent():
 
 class atari_trainer():
     def __init__(self, agent):
-        self.env = gym.make('SpaceInvaders-v4')
-        # self.env = gym.make('SpaceInvaders-v4', render_mode='human')
+        # self.env = gym.make('SpaceInvaders-v4')
+        self.env = gym.make('SpaceInvaders-v4', render_mode='human')
         self.gameOverTag = False
         self.samplingEpisodes = 30
-        self.greedy = .2
+        self.greedy = .5
         self.bs = 128
         self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
@@ -48,6 +48,7 @@ class atari_trainer():
         observation = (np.array(observation) - 128.0)/256.0
         rewardBuffer = []  # the reward of an action will be counted for 30 steps
         cLives = info['lives']
+        self.greedy *= .99
 
         while (cEpi < self.samplingEpisodes):
 
