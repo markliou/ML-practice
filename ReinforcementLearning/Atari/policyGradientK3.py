@@ -34,7 +34,7 @@ class atari_trainer():
         self.env = gym.make('SpaceInvaders-v4')
         # self.env = gym.make('SpaceInvaders-v4', render_mode='human')
         self.gameOverTag = False
-        self.samplingEpisodes = 3
+        self.samplingEpisodes = 30
         self.greedy = .5
         self.bs = 128
         self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
@@ -102,19 +102,20 @@ class atari_trainer():
             if (accumulatedReward != 0.0):
                 self.replayBuffer.append(
                     (observation, accumulatedReward, action, actionP.numpy()))
-            if (len(self.replayBuffer) > self.bs * 30):
+            if (len(self.replayBuffer) > self.bs * 5000):
                 self.replayBuffer.pop(0)
 
-    def agent_learning(self):
         # shuffling the replay buffer
         random.shuffle(self.replayBuffer)
 
+    def agent_learning(self):
         # obvStacks, rewardStacks, actionStacks, actionPStacks = zip(
         #     *self.replayBuffer)
         obvStacks = (i[0] for i in self.replayBuffer)
         rewardStacks = (i[1] for i in self.replayBuffer)
         actionStacks = (i[2] for i in self.replayBuffer)
         actionPStacks = (i[3] for i in self.replayBuffer)
+
         stateDataset = tf.data.Dataset.from_tensor_slices(
             (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
         stateDataset = stateDataset.batch(self.bs, drop_remainder=True)
