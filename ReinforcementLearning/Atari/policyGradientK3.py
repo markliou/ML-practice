@@ -34,7 +34,7 @@ class atari_trainer():
         self.env = gym.make('SpaceInvaders-v4')
         # self.env = gym.make('SpaceInvaders-v4', render_mode='human')
         self.gameOverTag = False
-        self.samplingEpisodes = 30
+        self.samplingEpisodes = 3
         self.greedy = .5
         self.bs = 128
         self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
@@ -56,11 +56,11 @@ class atari_trainer():
             observation = (np.array(observation) - 128.0)/256.0
 
             # greedy sampling
+            agentAction = self.agent(tf.reshape(observation, [1, 210, 160, 3]))
             if np.random.random() < self.greedy:
                 action = self.env.action_space.sample()
             else:
-                action = np.argmax(self.agent(
-                    tf.reshape(observation, [1, 210, 160, 3])))
+                action = np.argmax(agentAction)
 
             # print(f"action: {action}")
 
@@ -96,9 +96,12 @@ class atari_trainer():
 
             # appending observation into replay buffer. The element limit will be batch size * 5000
             accumulatedReward = np.array(rewardBuffer).mean()
+            actionP = tf.reduce_sum(
+                agentAction * tf.stack([tf.one_hot(action, 6)], axis=0))
+
             if (accumulatedReward != 0.0):
                 self.replayBuffer.append(
-                    (observation, accumulatedReward, action))
+                    (observation, accumulatedReward, action, actionP.numpy()))
             if (len(self.replayBuffer) > self.bs * 30):
                 self.replayBuffer.pop(0)
 
@@ -110,6 +113,7 @@ class atari_trainer():
         obvStack = []
         rewardStack = []
         actionStack = []
+        actionPStack = []
         for i in range(len(self.replayBuffer)):
             # refactor the training data from replay buffer
             bsCounter += 1
@@ -117,12 +121,14 @@ class atari_trainer():
             obvStack.append(state[0])
             rewardStack.append(tf.cast(state[1], tf.float32))
             actionStack.append(state[2])
+            actionPStack.append(state[3])
 
             # policy gradient training
             if (bsCounter == self.bs):
                 obvStack = tf.stack(obvStack, axis=0)
                 rewardStack = tf.stack(rewardStack, axis=0)
                 actionStack = tf.one_hot(tf.stack(actionStack, axis=0), 6)
+                actionPStack = tf.stack(actionPStack, axis=0)
 
                 @tf.function(reduce_retracing=True)
                 def update_agent_weights():
@@ -130,7 +136,7 @@ class atari_trainer():
                         predicts = self.agent(obvStack)
 
                         # importance sampling
-                        under = tf.math.reduce_max(predicts, axis=-1)
+                        under = actionPStack
                         upper = tf.math.reduce_max(
                             predicts * actionStack, axis=-1)
                         iSampling = upper/under
@@ -153,6 +159,7 @@ class atari_trainer():
                 obvStack = []
                 rewardStack = []
                 actionStack = []
+                actionPStack = []
 
 
 def main():
