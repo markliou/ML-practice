@@ -109,8 +109,12 @@ class atari_trainer():
         # shuffling the replay buffer
         random.shuffle(self.replayBuffer)
 
-        obvStacks, rewardStacks, actionStacks, actionPStacks = zip(
-            *self.replayBuffer)
+        # obvStacks, rewardStacks, actionStacks, actionPStacks = zip(
+        #     *self.replayBuffer)
+        obvStacks = (i[0] for i in self.replayBuffer)
+        rewardStacks = (i[1] for i in self.replayBuffer)
+        actionStacks = (i[2] for i in self.replayBuffer)
+        actionPStacks = (i[3] for i in self.replayBuffer)
         stateDataset = tf.data.Dataset.from_tensor_slices(
             (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
         stateDataset = stateDataset.batch(self.bs, drop_remainder=True)
