@@ -31,8 +31,8 @@ def agent():
 
 class atari_trainer():
     def __init__(self, agent):
-        self.env = gym.make('SpaceInvaders-v4')
-        # self.env = gym.make('SpaceInvaders-v4', render_mode='human')
+        # self.env = gym.make('SpaceInvaders-v4')
+        self.env = gym.make('SpaceInvaders-v4', render_mode='human')
         self.gameOverTag = False
         self.samplingEpisodes = 3
         self.greedy = .5
@@ -74,7 +74,7 @@ class atari_trainer():
             if (terminated == True):
                 # show the sampling process informations
                 print(
-                    f'Episode:{cEpi}/{self.samplingEpisodes} score:{epiScore}')
+                    f'Episode:{cEpi}/{self.samplingEpisodes} score:{epiScore} greedy:{self.greedy}')
 
                 cEpi += 1
                 observation, info = self.env.reset()
