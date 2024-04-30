@@ -34,9 +34,9 @@ class atari_trainer():
         self.env = gym.make('SpaceInvaders-v4')
         # self.env = gym.make('SpaceInvaders-v4', render_mode='human')
         self.gameOverTag = False
-        self.samplingEpisodes = 30
+        self.samplingEpisodes = 10
         self.greedy = .5
-        self.bs = 128
+        self.bs = 64
         self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
         self.replayBuffer = []
@@ -102,7 +102,7 @@ class atari_trainer():
             if (accumulatedReward != 0.0):
                 self.replayBuffer.append(
                     (observation, accumulatedReward, action, actionP.numpy()))
-            if (len(self.replayBuffer) > self.bs * 5000):
+            if (len(self.replayBuffer) > self.bs * 100):
                 self.replayBuffer.pop(0)
 
         # shuffling the replay buffer
