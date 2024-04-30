@@ -31,8 +31,8 @@ def agent():
 
 class atari_trainer():
     def __init__(self, agent):
-        # self.env = gym.make('SpaceInvaders-v4')
-        self.env = gym.make('SpaceInvaders-v4', render_mode='human')
+        self.env = gym.make('SpaceInvaders-v4')
+        # self.env = gym.make('SpaceInvaders-v4', render_mode='human')
         self.gameOverTag = False
         self.samplingEpisodes = 3
         self.greedy = .5
@@ -109,57 +109,45 @@ class atari_trainer():
         # shuffling the replay buffer
         random.shuffle(self.replayBuffer)
 
-        bsCounter = 0
-        obvStack = []
-        rewardStack = []
-        actionStack = []
-        actionPStack = []
-        for i in range(len(self.replayBuffer)):
-            # refactor the training data from replay buffer
-            bsCounter += 1
-            state = self.replayBuffer[i]
-            obvStack.append(state[0])
-            rewardStack.append(tf.cast(state[1], tf.float32))
-            actionStack.append(state[2])
-            actionPStack.append(state[3])
+        obvStacks, rewardStacks, actionStacks, actionPStacks = zip(
+            *self.replayBuffer)
+        stateDataset = tf.data.Dataset.from_tensor_slices(
+            (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
+        stateDataset = stateDataset.batch(self.bs, drop_remainder=True)
 
+        for state in stateDataset:
             # policy gradient training
-            if (bsCounter == self.bs):
-                obvStack = tf.stack(obvStack, axis=0)
-                rewardStack = tf.stack(rewardStack, axis=0)
-                actionStack = tf.one_hot(tf.stack(actionStack, axis=0), 6)
-                actionPStack = tf.stack(actionPStack, axis=0)
+            obvStack = state[0]
+            rewardStack = state[1]
+            actionStack = tf.one_hot(tf.stack(state[2], axis=0), 6)
+            actionPStack = state[3]
 
-                @tf.function(reduce_retracing=True)
-                def update_agent_weights():
-                    with tf.GradientTape() as grad:
-                        predicts = self.agent(obvStack)
+            cLoss = self.update_agent_weights(
+                obvStack, rewardStack, actionStack, actionPStack)
+            print(f"loss:{cLoss}")
 
-                        # importance sampling
-                        under = actionPStack
-                        upper = tf.math.reduce_max(
-                            predicts * actionStack, axis=-1)
-                        iSampling = upper/under
+    @tf.function(reduce_retracing=True)
+    def update_agent_weights(self, obvStack, rewardStack, actionStack, actionPStack):
+        with tf.GradientTape() as grad:
+            predicts = self.agent(obvStack)
 
-                        ce = tf.reduce_sum(
-                            actionStack * -tf.math.log(predicts + 1e-6), axis=-1)
-                        policy_ce = tf.reduce_mean(
-                            rewardStack * ce * tf.stop_gradient(iSampling))
+            # importance sampling
+            under = actionPStack
+            upper = tf.math.reduce_max(
+                predicts * actionStack, axis=-1)
+            iSampling = tf.cast(upper/under, tf.float32)
 
-                    gradients = grad.gradient(
-                        policy_ce, self.agent.trainable_variables)
-                    self.optimizer.apply(
-                        gradients, self.agent.trainable_variables)
+            ce = tf.reduce_sum(
+                actionStack * -tf.math.log(predicts + 1e-6), axis=-1)
+            policy_ce = tf.reduce_mean(
+                tf.cast(rewardStack, tf.float32) * ce * tf.stop_gradient(iSampling))
 
-                    return policy_ce
+            gradients = grad.gradient(
+                policy_ce, self.agent.trainable_variables)
+            self.optimizer.apply(
+                gradients, self.agent.trainable_variables)
 
-                print(f"loss:{update_agent_weights()}")
-
-                bsCounter = 0
-                obvStack = []
-                rewardStack = []
-                actionStack = []
-                actionPStack = []
+        return policy_ce
 
 
 def main():
