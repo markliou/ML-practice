@@ -35,7 +35,7 @@ class atari_trainer():
         # self.env = gym.make('SpaceInvaders-v4', render_mode='human')
         self.gameOverTag = False
         self.samplingEpisodes = 10
-        self.greedy = .5
+        self.greedy = .2
         self.bs = 128
         self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
@@ -45,7 +45,7 @@ class atari_trainer():
         cEpi = 0
         epiScore = 0
         observation, info = self.env.reset()
-        observation = (np.array(observation) - 128.0)/256.0
+        observation = (np.array(observation) - 128.0)/128.0
         rewardBuffer = []  # the reward of an action will be counted for 30 steps
         cLives = info['lives']
         self.greedy *= .99
@@ -53,7 +53,7 @@ class atari_trainer():
 
         while (cEpi < self.samplingEpisodes):
 
-            observation = (np.array(observation) - 128.0)/256.0
+            observation = (np.array(observation) - 128.0)/128.0
 
             # greedy sampling
             agentAction = self.agent(tf.reshape(observation, [1, 210, 160, 3]))
@@ -67,7 +67,7 @@ class atari_trainer():
             # interaction with atari
             observation, reward, terminated, truncated, info = self.env.step(
                 action)
-            observation = (np.array(observation) - 128.0)/256.0
+            observation = (np.array(observation) - 128.0)/128.0
             epiScore += reward
 
             # if the episode over, the parameters will be reset
@@ -78,7 +78,7 @@ class atari_trainer():
 
                 cEpi += 1
                 observation, info = self.env.reset()
-                observation = (np.array(observation) - 128.0)/256.0
+                observation = (np.array(observation) - 128.0)/128.0
                 rewardBuffer = []
                 cLives = info['lives']
                 epiScore = 0
@@ -95,7 +95,7 @@ class atari_trainer():
                 rewardBuffer.pop(0)
 
             # appending observation into replay buffer. The element limit will be batch size * 5000
-            accumulatedReward = np.array(rewardBuffer).mean()
+            accumulatedReward = np.clip(np.array(rewardBuffer).mean(), -1, 5)
             actionP = tf.reduce_sum(
                 agentAction * tf.stack([tf.one_hot(action, 6)], axis=0))
 
