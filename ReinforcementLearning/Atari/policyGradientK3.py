@@ -104,21 +104,21 @@ class atari_trainer():
                 agentAction * tf.stack([tf.one_hot(action, 6)], axis=0))
 
             if (accumulatedReward != 0.0):
-                # self.replayBuffer.append(
-                #     (observation, accumulatedReward, action, actionP.numpy()))
+                self.replayBuffer.append(
+                    (observation, accumulatedReward, action, actionP.numpy()))
 
-                self.observationRB.append(observation)
-                self.accumulatedRewardRB.append(accumulatedReward)
-                self.actionRB.append(action)
-                self.actionPRB.append(actionP.numpy())
+                # self.observationRB.append(observation)
+                # self.accumulatedRewardRB.append(accumulatedReward)
+                # self.actionRB.append(action)
+                # self.actionPRB.append(actionP.numpy())
 
             if (len(self.replayBuffer) > self.bs * 50):
-                # self.replayBuffer.pop(0)
+                self.replayBuffer.pop(0)
 
-                self.observationRB.pop(0)
-                self.accumulatedRewardRB.pop(0)
-                self.actionRB.pop(0)
-                self.actionPRB.pop(0)
+                # self.observationRB.pop(0)
+                # self.accumulatedRewardRB.pop(0)
+                # self.actionRB.pop(0)
+                # self.actionPRB.pop(0)
 
         # shuffling the replay buffer
         random.shuffle(self.replayBuffer)
@@ -131,12 +131,12 @@ class atari_trainer():
         actionStacks = (i[2] for i in self.replayBuffer)
         actionPStacks = (i[3] for i in self.replayBuffer)
 
-        # stateDataset = tf.data.Dataset.from_tensor_slices(
-        #     (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
         stateDataset = tf.data.Dataset.from_tensor_slices(
-            (self.observationRB, self.accumulatedRewardRB, self.actionRB, self.actionPRB))
+            (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
+        # stateDataset = tf.data.Dataset.from_tensor_slices(
+        #     (self.observationRB, self.accumulatedRewardRB, self.actionRB, self.actionPRB))
         stateDataset = stateDataset.batch(
-            self.bs, drop_remainder=True).shuffle(128).repeat(3)
+            self.bs, drop_remainder=True).repeat(3)
 
         for state in stateDataset:
             # policy gradient training
