@@ -35,9 +35,11 @@ class atari_trainer():
         # self.env = gym.make('SpaceInvaders-v4', render_mode='human')
         self.gameOverTag = False
         self.samplingEpisodes = 10
+        # self.samplingEpisodes = 2
         self.greedy = .2
-        self.bs = 128
-        self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
+        self.bs = 64
+        self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.AdamW(1e-4, global_clipnorm=1.))
+        # self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
         self.replayBuffer = []
         self.observationRB = []
@@ -101,79 +103,81 @@ class atari_trainer():
             # appending observation into replay buffer. The element limit will be batch size * 5000
             accumulatedReward = np.clip(np.array(rewardBuffer).mean(), -1, 5)
             actionP = tf.reduce_sum(
-                agentAction * tf.stack([tf.one_hot(action, 6)], axis=0))
+                agentAction * tf.stack([tf.one_hot(action, 6, dtype='bfloat16')], axis=0))
 
             if (accumulatedReward != 0.0):
-                self.replayBuffer.append(
-                    (observation, accumulatedReward, action, actionP.numpy()))
+                # self.replayBuffer.append(
+                #     (observation, accumulatedReward, action, actionP.numpy()))
 
-                # self.observationRB.append(observation)
-                # self.accumulatedRewardRB.append(accumulatedReward)
-                # self.actionRB.append(action)
-                # self.actionPRB.append(actionP.numpy())
+                self.observationRB.append(tf.Variable(observation, dtype='bfloat16'))
+                self.accumulatedRewardRB.append(tf.Variable(accumulatedReward, dtype='bfloat16'))
+                self.actionRB.append(tf.Variable(action, dtype='int8'))
+                self.actionPRB.append(actionP)
 
             if (len(self.replayBuffer) > self.bs * 50):
-                self.replayBuffer.pop(0)
+                # self.replayBuffer.pop(0)
 
-                # self.observationRB.pop(0)
-                # self.accumulatedRewardRB.pop(0)
-                # self.actionRB.pop(0)
-                # self.actionPRB.pop(0)
+                self.observationRB.pop(0)
+                self.accumulatedRewardRB.pop(0)
+                self.actionRB.pop(0)
+                self.actionPRB.pop(0)
 
         # shuffling the replay buffer
-        random.shuffle(self.replayBuffer)
+        # random.shuffle(self.replayBuffer)
 
     def agent_learning(self):
         # obvStacks, rewardStacks, actionStacks, actionPStacks = zip(
         #     *self.replayBuffer)
-        obvStacks = (i[0] for i in self.replayBuffer)
-        rewardStacks = (i[1] for i in self.replayBuffer)
-        actionStacks = (i[2] for i in self.replayBuffer)
-        actionPStacks = (i[3] for i in self.replayBuffer)
+        # obvStacks = (i[0] for i in self.replayBuffer)
+        # rewardStacks = (i[1] for i in self.replayBuffer)
+        # actionStacks = (i[2] for i in self.replayBuffer)
+        # actionPStacks = (i[3] for i in self.replayBuffer)
 
-        stateDataset = tf.data.Dataset.from_tensor_slices(
-            (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
         # stateDataset = tf.data.Dataset.from_tensor_slices(
-        #     (self.observationRB, self.accumulatedRewardRB, self.actionRB, self.actionPRB))
+        #     (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
+        stateDataset = tf.data.Dataset.from_tensor_slices(
+            (self.observationRB, self.accumulatedRewardRB, self.actionRB, self.actionPRB))
         stateDataset = stateDataset.batch(
-            self.bs, drop_remainder=True).repeat(3)
+            self.bs, drop_remainder=True).repeat(3).shuffle(128)
 
         for state in stateDataset:
             # policy gradient training
             obvStack = state[0]
             rewardStack = state[1]
-            actionStack = tf.one_hot(tf.stack(state[2], axis=0), 6)
+            actionStack = tf.one_hot(tf.stack(state[2], axis=0), 6, dtype="bfloat16")
             actionPStack = state[3]
 
             cLoss = self.update_agent_weights(
                 obvStack, rewardStack, actionStack, actionPStack)
             print(f"loss:{cLoss}")
 
-    @tf.function(reduce_retracing=True)
+    @tf.function()
     def update_agent_weights(self, obvStack, rewardStack, actionStack, actionPStack):
-        with tf.GradientTape() as grad:
-            predicts = self.agent(obvStack)
+        with tf.device('/GPU:1'):
+            with tf.GradientTape() as grad:
+                predicts = self.agent(obvStack)
 
-            # importance sampling
-            under = actionPStack
-            upper = tf.math.reduce_max(
-                predicts * actionStack, axis=-1)
-            iSampling = tf.cast(upper/under, tf.float32)
+                # importance sampling
+                under = actionPStack
+                upper = tf.math.reduce_max(
+                    predicts * actionStack, axis=-1)
+                iSampling = tf.cast(upper/under, dtype='bfloat16')
 
-            ce = tf.reduce_sum(
-                actionStack * -tf.math.log(predicts + 1e-6), axis=-1)
-            policy_ce = tf.reduce_mean(
-                tf.cast(rewardStack, tf.float32) * ce * tf.stop_gradient(iSampling))
+                ce = tf.reduce_sum(
+                    actionStack * -tf.math.log(predicts + 1e-6), axis=-1)
+                policy_ce = tf.reduce_mean(
+                    tf.cast(rewardStack, dtype='bfloat16') * ce * tf.stop_gradient(iSampling))
 
-            gradients = grad.gradient(
-                policy_ce, self.agent.trainable_variables)
-            self.optimizer.apply(
-                gradients, self.agent.trainable_variables)
+                gradients = grad.gradient(
+                    policy_ce, self.agent.trainable_variables)
+                self.optimizer.apply(
+                    gradients, self.agent.trainable_variables)
 
         return policy_ce
 
 
 def main():
+    k.mixed_precision.set_global_policy('mixed_bfloat16')
     ag = agent()
     env = atari_trainer(ag)
 
