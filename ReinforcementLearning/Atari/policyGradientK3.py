@@ -46,24 +46,27 @@ class atari_trainer():
         self.replayBuffer = []
         self.greedyFlag = False
 
-    def sampling(self):
-        cEpi = 0
+    def pooling_sampling(self):
+        for cEpi in range(self.samplingEpisodes):
+            self.sampling(cEpi)
+
+    def sampling(self, eipNo):
         epiScore = 0
-        observation, info = self.env[0].reset()
+        observation, info = self.env[eipNo].reset()
         observation = (np.array(observation) - 128.0)/128.0
         rewardBuffer = []  # the reward of an action will be counted for 30 steps
         cLives = info['lives']
         self.greedy *= .99
         self.greedy = max(self.greedy, 0.02)
+        terminated = False
 
-        while (cEpi < self.samplingEpisodes):
-
+        while (terminated != True):
             observation = (np.array(observation) - 128.0)/128.0
 
             # greedy sampling
             agentAction = self.agent(tf.reshape(observation, [1, 210, 160, 3]))
             if np.random.random() < self.greedy:
-                action = self.env[0].action_space.sample()
+                action = self.env[eipNo].action_space.sample()
                 self.greedyFlag = True
             else:
                 action = np.argmax(agentAction)
@@ -72,7 +75,7 @@ class atari_trainer():
             # print(f"action: {action}")
 
             # interaction with atari
-            observation, reward, terminated, truncated, info = self.env[0].step(
+            observation, reward, terminated, truncated, info = self.env[eipNo].step(
                 action)
             observation = (np.array(observation) - 128.0)/128.0
             epiScore += reward
@@ -81,10 +84,9 @@ class atari_trainer():
             if (terminated == True):
                 # show the sampling process information
                 print(
-                    f'Episode:{cEpi}/{self.samplingEpisodes} score:{epiScore} greedy:{self.greedy}')
+                    f'Episode:{eipNo}/{self.samplingEpisodes} score:{epiScore} greedy:{self.greedy}')
 
-                cEpi += 1
-                observation, info = self.env[0].reset()
+                observation, info = self.env[eipNo].reset()
                 observation = (np.array(observation) - 128.0)/128.0
                 rewardBuffer = []
                 cLives = info['lives']
@@ -176,7 +178,7 @@ def main():
     env = atari_trainer(ag)
 
     while (1):
-        env.sampling()
+        env.pooling_sampling()
         env.agent_learning()
 
 
