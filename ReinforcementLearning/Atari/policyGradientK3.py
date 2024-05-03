@@ -37,8 +37,9 @@ class atari_trainer():
         self.samplingEpisodes = 10
         # self.samplingEpisodes = 2
         self.greedy = .2
-        self.bs = 128
-        self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.AdamW(1e-4, global_clipnorm=1.))
+        self.bs = 32
+        self.lr = k.optimizers.schedules.CosineDecay(0.0, 5000, alpha=1e-4, warmup_target=8e-4, warmup_steps=1000)
+        self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.AdamW(self.lr, global_clipnorm=1.))
         # self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
         self.replayBuffer = []
@@ -100,8 +101,9 @@ class atari_trainer():
             if (len(rewardBuffer) > 30):
                 rewardBuffer.pop(0)
 
-            # appending observation into replay buffer. The element limit will be batch size * 5000
-            accumulatedReward = np.clip(np.array(rewardBuffer).mean(), -1, 5)
+            # appending observation into replay buffer. The element limit will be batch size * 100
+            # accumulatedReward = np.clip(np.array(rewardBuffer).mean(), -1, 5)
+            accumulatedReward = np.array(rewardBuffer).mean()
             actionP = tf.reduce_sum(
                 agentAction * tf.stack([tf.one_hot(action, 6, dtype='bfloat16')], axis=0))
 
@@ -114,7 +116,7 @@ class atari_trainer():
                 self.actionRB.append(tf.Variable(action, dtype='int8'))
                 self.actionPRB.append(actionP)
 
-            if (len(self.replayBuffer) > self.bs * 100):
+            if (len(self.replayBuffer) > self.bs * 400):
                 self.replayBuffer.pop(0)
 
                 self.observationRB.pop(0)
@@ -138,7 +140,7 @@ class atari_trainer():
         stateDataset = tf.data.Dataset.from_tensor_slices(
             (self.observationRB, self.accumulatedRewardRB, self.actionRB, self.actionPRB))
         stateDataset = stateDataset.batch(
-            self.bs, drop_remainder=True).repeat(2).shuffle(128)
+            self.bs, drop_remainder=True).repeat(1).shuffle(128)
 
         for state in stateDataset:
             # policy gradient training
