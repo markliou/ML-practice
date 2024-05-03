@@ -47,6 +47,7 @@ class atari_trainer():
         self.accumulatedRewardRB = []
         self.actionRB = []
         self.actionPRB = []
+        self.greedyFlag = False
 
     def sampling(self):
         cEpi = 0
@@ -66,8 +67,10 @@ class atari_trainer():
             agentAction = self.agent(tf.reshape(observation, [1, 210, 160, 3]))
             if np.random.random() < self.greedy:
                 action = self.env.action_space.sample()
+                self.greedyFlag = True
             else:
                 action = np.argmax(agentAction)
+                self.greedyFlag = False
 
             # print(f"action: {action}")
 
@@ -164,11 +167,11 @@ class atari_trainer():
                 upper = tf.math.reduce_max(
                     predicts * actionStack, axis=-1)
                 iSampling = tf.cast(upper/under, dtype='bfloat16')
+                clippedReward = tf.clip_by_value(tf.cast(rewardStack, dtype='bfloat16') * tf.stop_gradient(iSampling), -1, 5)
 
                 ce = tf.reduce_sum(
                     actionStack * -tf.math.log(predicts + 1e-6), axis=-1)
-                policy_ce = tf.reduce_mean(
-                    tf.cast(rewardStack, dtype='bfloat16') * ce * tf.stop_gradient(iSampling))
+                policy_ce = tf.reduce_mean(clippedReward * ce )
 
                 gradients = grad.gradient(
                     policy_ce, self.agent.trainable_variables)
