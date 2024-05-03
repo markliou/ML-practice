@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image
 import time
 import random
+import threading
 
 
 def agent():
@@ -31,10 +32,10 @@ def agent():
 
 class atari_trainer():
     def __init__(self, agent):
-        self.env = gym.make('SpaceInvaders-v4')
+        self.samplingEpisodes = 10
+        self.env = [gym.make('SpaceInvaders-v4') for i in range(self.samplingEpisodes)]
         # self.env = gym.make('SpaceInvaders-v4', render_mode='human')
         self.gameOverTag = False
-        self.samplingEpisodes = 10
         # self.samplingEpisodes = 2
         self.greedy = .2
         self.bs = 32
@@ -43,16 +44,12 @@ class atari_trainer():
         # self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
         self.replayBuffer = []
-        self.observationRB = []
-        self.accumulatedRewardRB = []
-        self.actionRB = []
-        self.actionPRB = []
         self.greedyFlag = False
 
     def sampling(self):
         cEpi = 0
         epiScore = 0
-        observation, info = self.env.reset()
+        observation, info = self.env[0].reset()
         observation = (np.array(observation) - 128.0)/128.0
         rewardBuffer = []  # the reward of an action will be counted for 30 steps
         cLives = info['lives']
@@ -66,7 +63,7 @@ class atari_trainer():
             # greedy sampling
             agentAction = self.agent(tf.reshape(observation, [1, 210, 160, 3]))
             if np.random.random() < self.greedy:
-                action = self.env.action_space.sample()
+                action = self.env[0].action_space.sample()
                 self.greedyFlag = True
             else:
                 action = np.argmax(agentAction)
@@ -75,7 +72,7 @@ class atari_trainer():
             # print(f"action: {action}")
 
             # interaction with atari
-            observation, reward, terminated, truncated, info = self.env.step(
+            observation, reward, terminated, truncated, info = self.env[0].step(
                 action)
             observation = (np.array(observation) - 128.0)/128.0
             epiScore += reward
@@ -87,7 +84,7 @@ class atari_trainer():
                     f'Episode:{cEpi}/{self.samplingEpisodes} score:{epiScore} greedy:{self.greedy}')
 
                 cEpi += 1
-                observation, info = self.env.reset()
+                observation, info = self.env[0].reset()
                 observation = (np.array(observation) - 128.0)/128.0
                 rewardBuffer = []
                 cLives = info['lives']
@@ -111,37 +108,29 @@ class atari_trainer():
                 agentAction * tf.stack([tf.one_hot(action, 6, dtype='bfloat16')], axis=0))
 
             if (accumulatedReward != 0.0):
-                self.replayBuffer.append(
-                    (observation, accumulatedReward, action, actionP.numpy()))
-
-                self.observationRB.append(tf.Variable(observation, dtype='bfloat16'))
-                self.accumulatedRewardRB.append(tf.Variable(accumulatedReward, dtype='bfloat16'))
-                self.actionRB.append(tf.Variable(action, dtype='int8'))
-                self.actionPRB.append(actionP)
+                # self.replayBuffer.append(
+                #     (observation, accumulatedReward, action, actionP.numpy()))
+                self.replayBuffer.append((tf.Variable(observation, dtype='bfloat16'),
+                                         tf.Variable(accumulatedReward, dtype='bfloat16'),
+                                         tf.Variable(action, dtype='int8'),
+                                         actionP))
 
             if (len(self.replayBuffer) > self.bs * 400):
                 self.replayBuffer.pop(0)
-
-                self.observationRB.pop(0)
-                self.accumulatedRewardRB.pop(0)
-                self.actionRB.pop(0)
-                self.actionPRB.pop(0)
 
         # shuffling the replay buffer
         random.shuffle(self.replayBuffer)
 
     def agent_learning(self):
-        # obvStacks, rewardStacks, actionStacks, actionPStacks = zip(
-        #     *self.replayBuffer)
-        # obvStacks = (i[0] for i in self.replayBuffer)
-        # rewardStacks = (i[1] for i in self.replayBuffer)
-        # actionStacks = (i[2] for i in self.replayBuffer)
-        # actionPStacks = (i[3] for i in self.replayBuffer)
+        obvStacks, rewardStacks, actionStacks, actionPStacks = zip(
+            *self.replayBuffer)
+        obvStacks = (i[0] for i in self.replayBuffer)
+        rewardStacks = (i[1] for i in self.replayBuffer)
+        actionStacks = (i[2] for i in self.replayBuffer)
+        actionPStacks = (i[3] for i in self.replayBuffer)
 
-        # stateDataset = tf.data.Dataset.from_tensor_slices(
-        #     (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
         stateDataset = tf.data.Dataset.from_tensor_slices(
-            (self.observationRB, self.accumulatedRewardRB, self.actionRB, self.actionPRB))
+            (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
         stateDataset = stateDataset.batch(
             self.bs, drop_remainder=True).repeat(1).shuffle(128)
 
@@ -156,9 +145,9 @@ class atari_trainer():
                 obvStack, rewardStack, actionStack, actionPStack)
             print(f"loss:{cLoss}")
 
-    @tf.function()
+    @tf.function(jit_compile=True)
     def update_agent_weights(self, obvStack, rewardStack, actionStack, actionPStack):
-        with tf.device('/GPU:1'):
+        with tf.device('/GPU:0'):
             with tf.GradientTape() as grad:
                 predicts = self.agent(obvStack)
 
