@@ -7,6 +7,8 @@ from PIL import Image
 import time
 import random
 import threading
+import multiprocessing as mp
+import timeit
 
 
 def agent():
@@ -31,8 +33,8 @@ def agent():
 
 
 class atari_trainer():
-    def __init__(self, agent):
-        self.samplingEpisodes = 10
+    def __init__(self, agent, epiNo, cloneAgFunc):
+        self.samplingEpisodes = epiNo
         self.env = [gym.make('SpaceInvaders-v4') for i in range(self.samplingEpisodes)]
         # self.env = gym.make('SpaceInvaders-v4', render_mode='human')
         self.gameOverTag = False
@@ -43,28 +45,52 @@ class atari_trainer():
         self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.AdamW(self.lr, global_clipnorm=1.))
         # self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
+        self.cloneAg = [cloneAgFunc() for i in range(epiNo)]
         self.replayBuffer = []
         self.greedyFlag = False
 
     def pooling_sampling(self):
+        self.greedy *= .99
+        self.greedy = max(self.greedy, 0.02)
+        
+        start = timeit.default_timer()
+        
+        # # multi thread
+        # gameEnv = []
+        # # fire the threading 
+        # for cEpi in range(self.samplingEpisodes):
+        #     gameEnv.append(threading.Thread(target = self.sampling, args = (cEpi,)))
+        #     # gameEnv.append(mp.Process(target = self.sampling, args = (cEpi,)))
+        #     gameEnv[cEpi].start()
+            
+        # # collecting the threading
+        # for cEpi in range(self.samplingEpisodes):
+        #     gameEnv[cEpi].join()
+        
+        # single thread
         for cEpi in range(self.samplingEpisodes):
             self.sampling(cEpi)
+            
+        print('Epi Sampling Time: ', timeit.default_timer() - start)  
 
     def sampling(self, eipNo):
+        # cloneModel = self.cloneAg[eipNo]
+        # cloneModel.set_weights(self.agent.get_weights())
+        cloneModel = self.agent
         epiScore = 0
         observation, info = self.env[eipNo].reset()
         observation = (np.array(observation) - 128.0)/128.0
         rewardBuffer = []  # the reward of an action will be counted for 30 steps
         cLives = info['lives']
-        self.greedy *= .99
-        self.greedy = max(self.greedy, 0.02)
+        # self.greedy *= .99
+        # self.greedy = max(self.greedy, 0.02)
         terminated = False
 
         while (terminated != True):
             observation = (np.array(observation) - 128.0)/128.0
 
             # greedy sampling
-            agentAction = self.agent(tf.reshape(observation, [1, 210, 160, 3]))
+            agentAction = cloneModel(tf.reshape(observation, [1, 210, 160, 3]))
             if np.random.random() < self.greedy:
                 action = self.env[eipNo].action_space.sample()
                 self.greedyFlag = True
@@ -131,10 +157,11 @@ class atari_trainer():
         actionStacks = (i[2] for i in self.replayBuffer)
         actionPStacks = (i[3] for i in self.replayBuffer)
 
-        stateDataset = tf.data.Dataset.from_tensor_slices(
-            (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
-        stateDataset = stateDataset.batch(
-            self.bs, drop_remainder=True).repeat(1).shuffle(128)
+        with tf.device('/GPU:1'):
+            stateDataset = tf.data.Dataset.from_tensor_slices(
+                (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
+            stateDataset = stateDataset.batch(
+                self.bs, drop_remainder=True).repeat(1).shuffle(128)
 
         for state in stateDataset:
             # policy gradient training
@@ -175,7 +202,7 @@ class atari_trainer():
 def main():
     k.mixed_precision.set_global_policy('mixed_bfloat16')
     ag = agent()
-    env = atari_trainer(ag)
+    env = atari_trainer(ag, epiNo=10, cloneAgFunc=agent)
 
     while (1):
         env.pooling_sampling()
