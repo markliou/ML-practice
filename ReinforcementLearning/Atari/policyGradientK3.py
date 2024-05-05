@@ -6,6 +6,9 @@ import numpy as np
 from PIL import Image
 import time
 import random
+import threading
+import multiprocessing as mp
+import timeit
 
 
 def agent():
@@ -16,10 +19,10 @@ def agent():
                             2, 2], padding="SAME", activation=tf.nn.tanh)(conv1)
     conv3 = k.layers.Conv2D(128, [5, 5], strides=[
                             2, 2], padding="SAME", activation=tf.nn.tanh)(conv2)
-    conv4 = k.layers.Conv2D(256, [5, 5], strides=[
+    conv4 = k.layers.Conv2D(256, [3, 3], strides=[
                             2, 2], padding="SAME", activation=tf.nn.tanh)(conv3)
-    conv5 = k.layers.Conv2D(512, [5, 5], strides=[
-                            2, 2], padding="SAME", activation=tf.nn.tanh)(conv4)
+    conv5 = k.layers.Conv2D(512, [3, 3], strides=[
+                            1, 1], padding="SAME", activation=tf.nn.tanh)(conv4)
     f0 = k.layers.Flatten()(conv5)
     f1 = k.layers.Dense(1024, tf.nn.tanh)(f0)
     f2 = k.layers.Dense(1024, tf.nn.tanh)(f1)
@@ -30,11 +33,11 @@ def agent():
 
 
 class atari_trainer():
-    def __init__(self, agent):
-        self.env = gym.make('SpaceInvaders-v4')
+    def __init__(self, agent, epiNo, cloneAgFunc):
+        self.samplingEpisodes = epiNo
+        self.env = [gym.make('SpaceInvaders-v4') for i in range(self.samplingEpisodes)]
         # self.env = gym.make('SpaceInvaders-v4', render_mode='human')
         self.gameOverTag = False
-        self.samplingEpisodes = 10
         # self.samplingEpisodes = 2
         self.greedy = .2
         self.bs = 32
@@ -42,31 +45,54 @@ class atari_trainer():
         self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.AdamW(self.lr, global_clipnorm=1.))
         # self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
+        # self.cloneAg = [cloneAgFunc() for i in range(epiNo
         self.replayBuffer = []
-        self.observationRB = []
-        self.accumulatedRewardRB = []
-        self.actionRB = []
-        self.actionPRB = []
         self.greedyFlag = False
 
-    def sampling(self):
-        cEpi = 0
+    def pooling_sampling(self):
+        self.greedy *= .99
+        self.greedy = max(self.greedy, 0.02)
+        
+        start = timeit.default_timer()
+        
+        # # multi thread
+        # gameEnv = []
+        # # fire the threading 
+        # for cEpi in range(self.samplingEpisodes):
+        #     gameEnv.append(threading.Thread(target = self.sampling, args = (cEpi,)))
+        #     # gameEnv.append(mp.Process(target = self.sampling, args = (cEpi,)))
+        #     gameEnv[cEpi].start()
+            
+        # # collecting the threading
+        # for cEpi in range(self.samplingEpisodes):
+        #     gameEnv[cEpi].join()
+        
+        # single thread
+        for cEpi in range(self.samplingEpisodes):
+            self.sampling(cEpi)
+            
+        print('Epi Sampling Time: ', timeit.default_timer() - start)  
+
+    def sampling(self, eipNo):
+        # cloneModel = self.cloneAg[eipNo]
+        # cloneModel.set_weights(self.agent.get_weights())
+        cloneModel = self.agent
         epiScore = 0
-        observation, info = self.env.reset()
+        observation, info = self.env[eipNo].reset()
         observation = (np.array(observation) - 128.0)/128.0
         rewardBuffer = []  # the reward of an action will be counted for 30 steps
         cLives = info['lives']
-        self.greedy *= .99
-        self.greedy = max(self.greedy, 0.02)
+        # self.greedy *= .99
+        # self.greedy = max(self.greedy, 0.02)
+        terminated = False
 
-        while (cEpi < self.samplingEpisodes):
-
+        while (terminated != True):
             observation = (np.array(observation) - 128.0)/128.0
 
             # greedy sampling
-            agentAction = self.agent(tf.reshape(observation, [1, 210, 160, 3]))
+            agentAction = cloneModel(tf.reshape(observation, [1, 210, 160, 3]))
             if np.random.random() < self.greedy:
-                action = self.env.action_space.sample()
+                action = self.env[eipNo].action_space.sample()
                 self.greedyFlag = True
             else:
                 action = np.argmax(agentAction)
@@ -75,7 +101,7 @@ class atari_trainer():
             # print(f"action: {action}")
 
             # interaction with atari
-            observation, reward, terminated, truncated, info = self.env.step(
+            observation, reward, terminated, truncated, info = self.env[eipNo].step(
                 action)
             observation = (np.array(observation) - 128.0)/128.0
             epiScore += reward
@@ -84,10 +110,9 @@ class atari_trainer():
             if (terminated == True):
                 # show the sampling process information
                 print(
-                    f'Episode:{cEpi}/{self.samplingEpisodes} score:{epiScore} greedy:{self.greedy}')
+                    f'Episode:{eipNo}/{self.samplingEpisodes} score:{epiScore} greedy:{self.greedy}')
 
-                cEpi += 1
-                observation, info = self.env.reset()
+                observation, info = self.env[eipNo].reset()
                 observation = (np.array(observation) - 128.0)/128.0
                 rewardBuffer = []
                 cLives = info['lives']
@@ -102,7 +127,8 @@ class atari_trainer():
             # append the reward to the reward buffer
             rewardBuffer.append(reward)
             if (len(rewardBuffer) > 30):
-                rewardBuffer.pop(0)
+                abandentV = rewardBuffer.pop(0)
+                del abandentV
 
             # appending observation into replay buffer. The element limit will be batch size * 100
             # accumulatedReward = np.clip(np.array(rewardBuffer).mean(), -1, 5)
@@ -111,39 +137,33 @@ class atari_trainer():
                 agentAction * tf.stack([tf.one_hot(action, 6, dtype='bfloat16')], axis=0))
 
             if (accumulatedReward != 0.0):
-                self.replayBuffer.append(
-                    (observation, accumulatedReward, action, actionP.numpy()))
-
-                self.observationRB.append(tf.Variable(observation, dtype='bfloat16'))
-                self.accumulatedRewardRB.append(tf.Variable(accumulatedReward, dtype='bfloat16'))
-                self.actionRB.append(tf.Variable(action, dtype='int8'))
-                self.actionPRB.append(actionP)
+                # self.replayBuffer.append(
+                #     (observation, accumulatedReward, action, actionP.numpy()))
+                self.replayBuffer.append((tf.Variable(observation, dtype='bfloat16'),
+                                         tf.Variable(accumulatedReward, dtype='bfloat16'),
+                                         tf.Variable(action, dtype='int8'),
+                                         actionP))
 
             if (len(self.replayBuffer) > self.bs * 400):
-                self.replayBuffer.pop(0)
-
-                self.observationRB.pop(0)
-                self.accumulatedRewardRB.pop(0)
-                self.actionRB.pop(0)
-                self.actionPRB.pop(0)
+                abandentV = self.replayBuffer.pop(0)
+                del abandentV
 
         # shuffling the replay buffer
         random.shuffle(self.replayBuffer)
 
     def agent_learning(self):
-        # obvStacks, rewardStacks, actionStacks, actionPStacks = zip(
-        #     *self.replayBuffer)
-        # obvStacks = (i[0] for i in self.replayBuffer)
-        # rewardStacks = (i[1] for i in self.replayBuffer)
-        # actionStacks = (i[2] for i in self.replayBuffer)
-        # actionPStacks = (i[3] for i in self.replayBuffer)
+        obvStacks, rewardStacks, actionStacks, actionPStacks = zip(
+            *self.replayBuffer)
+        obvStacks = (i[0] for i in self.replayBuffer)
+        rewardStacks = (i[1] for i in self.replayBuffer)
+        actionStacks = (i[2] for i in self.replayBuffer)
+        actionPStacks = (i[3] for i in self.replayBuffer)
 
-        # stateDataset = tf.data.Dataset.from_tensor_slices(
-        #     (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
-        stateDataset = tf.data.Dataset.from_tensor_slices(
-            (self.observationRB, self.accumulatedRewardRB, self.actionRB, self.actionPRB))
-        stateDataset = stateDataset.batch(
-            self.bs, drop_remainder=True).repeat(1).shuffle(128)
+        with tf.device('/GPU:1'):
+            stateDataset = tf.data.Dataset.from_tensor_slices(
+                (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
+            stateDataset = stateDataset.batch(
+                self.bs, drop_remainder=True).repeat(1)
 
         for state in stateDataset:
             # policy gradient training
@@ -155,10 +175,16 @@ class atari_trainer():
             cLoss = self.update_agent_weights(
                 obvStack, rewardStack, actionStack, actionPStack)
             print(f"loss:{cLoss}")
+        del obvStacks
+        del rewardStacks
+        del actionStacks
+        del actionPStacks
+        del stateDataset
+        
 
-    @tf.function()
+    @tf.function(jit_compile=True)
     def update_agent_weights(self, obvStack, rewardStack, actionStack, actionPStack):
-        with tf.device('/GPU:1'):
+        with tf.device('/GPU:0'):
             with tf.GradientTape() as grad:
                 predicts = self.agent(obvStack)
 
@@ -184,10 +210,10 @@ class atari_trainer():
 def main():
     k.mixed_precision.set_global_policy('mixed_bfloat16')
     ag = agent()
-    env = atari_trainer(ag)
+    env = atari_trainer(ag, epiNo=10, cloneAgFunc=agent)
 
     while (1):
-        env.sampling()
+        env.pooling_sampling()
         env.agent_learning()
 
 
