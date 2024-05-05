@@ -19,10 +19,10 @@ def agent():
                             2, 2], padding="SAME", activation=tf.nn.tanh)(conv1)
     conv3 = k.layers.Conv2D(128, [5, 5], strides=[
                             2, 2], padding="SAME", activation=tf.nn.tanh)(conv2)
-    conv4 = k.layers.Conv2D(256, [5, 5], strides=[
+    conv4 = k.layers.Conv2D(256, [3, 3], strides=[
                             2, 2], padding="SAME", activation=tf.nn.tanh)(conv3)
-    conv5 = k.layers.Conv2D(512, [5, 5], strides=[
-                            2, 2], padding="SAME", activation=tf.nn.tanh)(conv4)
+    conv5 = k.layers.Conv2D(512, [3, 3], strides=[
+                            1, 1], padding="SAME", activation=tf.nn.tanh)(conv4)
     f0 = k.layers.Flatten()(conv5)
     f1 = k.layers.Dense(1024, tf.nn.tanh)(f0)
     f2 = k.layers.Dense(1024, tf.nn.tanh)(f1)
@@ -45,7 +45,7 @@ class atari_trainer():
         self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.AdamW(self.lr, global_clipnorm=1.))
         # self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
-        self.cloneAg = [cloneAgFunc() for i in range(epiNo)]
+        # self.cloneAg = [cloneAgFunc() for i in range(epiNo
         self.replayBuffer = []
         self.greedyFlag = False
 
@@ -127,7 +127,8 @@ class atari_trainer():
             # append the reward to the reward buffer
             rewardBuffer.append(reward)
             if (len(rewardBuffer) > 30):
-                rewardBuffer.pop(0)
+                abandentV = rewardBuffer.pop(0)
+                del abandentV
 
             # appending observation into replay buffer. The element limit will be batch size * 100
             # accumulatedReward = np.clip(np.array(rewardBuffer).mean(), -1, 5)
@@ -144,7 +145,8 @@ class atari_trainer():
                                          actionP))
 
             if (len(self.replayBuffer) > self.bs * 400):
-                self.replayBuffer.pop(0)
+                abandentV = self.replayBuffer.pop(0)
+                del abandentV
 
         # shuffling the replay buffer
         random.shuffle(self.replayBuffer)
@@ -161,7 +163,7 @@ class atari_trainer():
             stateDataset = tf.data.Dataset.from_tensor_slices(
                 (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
             stateDataset = stateDataset.batch(
-                self.bs, drop_remainder=True).repeat(1).shuffle(128)
+                self.bs, drop_remainder=True).repeat(1)
 
         for state in stateDataset:
             # policy gradient training
@@ -173,6 +175,12 @@ class atari_trainer():
             cLoss = self.update_agent_weights(
                 obvStack, rewardStack, actionStack, actionPStack)
             print(f"loss:{cLoss}")
+        del obvStacks
+        del rewardStacks
+        del actionStacks
+        del actionPStacks
+        del stateDataset
+        
 
     @tf.function(jit_compile=True)
     def update_agent_weights(self, obvStack, rewardStack, actionStack, actionPStack):
