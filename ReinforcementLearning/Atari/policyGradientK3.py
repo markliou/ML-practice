@@ -126,7 +126,7 @@ class atari_trainer():
 
             # append the reward to the reward buffer
             rewardBuffer.append(reward)
-            if (len(rewardBuffer) > 30):
+            if (len(rewardBuffer) > 20):
                 abandentV = rewardBuffer.pop(0)
                 del abandentV
 
@@ -144,26 +144,26 @@ class atari_trainer():
                                          tf.Variable(action, dtype='int8'),
                                          actionP))
 
-            if (len(self.replayBuffer) > self.bs * 400):
+            if (len(self.replayBuffer) > self.bs * 100):
                 abandentV = self.replayBuffer.pop(0)
                 del abandentV
 
         # shuffling the replay buffer
-        random.shuffle(self.replayBuffer)
+        #random.shuffle(self.replayBuffer)
 
     def agent_learning(self):
         obvStacks, rewardStacks, actionStacks, actionPStacks = zip(
             *self.replayBuffer)
-        obvStacks = (i[0] for i in self.replayBuffer)
-        rewardStacks = (i[1] for i in self.replayBuffer)
-        actionStacks = (i[2] for i in self.replayBuffer)
-        actionPStacks = (i[3] for i in self.replayBuffer)
+        #obvStacks = (i[0] for i in self.replayBuffer)
+        #rewardStacks = (i[1] for i in self.replayBuffer)
+        #actionStacks = (i[2] for i in self.replayBuffer)
+        #actionPStacks = (i[3] for i in self.replayBuffer)
 
         with tf.device('/GPU:1'):
             stateDataset = tf.data.Dataset.from_tensor_slices(
                 (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
             stateDataset = stateDataset.batch(
-                self.bs, drop_remainder=True).repeat(1)
+                self.bs, drop_remainder=True).repeat(1).shuffle(32000)
 
         for state in stateDataset:
             # policy gradient training
@@ -196,7 +196,8 @@ class atari_trainer():
                 clippedReward = tf.clip_by_value(tf.cast(rewardStack, dtype='bfloat16') * tf.stop_gradient(iSampling), -1, 5)
 
                 ce = tf.reduce_sum(
-                    actionStack * -tf.math.log(predicts + 1e-6), axis=-1)
+                    # actionStack * -tf.math.log(predicts + 1e-6), axis=-1)
+                    actionStack * -tf.math.log(tf.clip_by_value(predicts, 1e-6, 1.)), axis=-1)
                 policy_ce = tf.reduce_mean(clippedReward * ce )
 
                 gradients = grad.gradient(
@@ -210,7 +211,7 @@ class atari_trainer():
 def main():
     k.mixed_precision.set_global_policy('mixed_bfloat16')
     ag = agent()
-    env = atari_trainer(ag, epiNo=10, cloneAgFunc=agent)
+    env = atari_trainer(ag, epiNo=5, cloneAgFunc=agent)
 
     while (1):
         env.pooling_sampling()
