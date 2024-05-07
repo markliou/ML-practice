@@ -40,8 +40,9 @@ class atari_trainer():
         self.gameOverTag = False
         # self.samplingEpisodes = 2
         self.greedy = .2
+        self.rewardBufferNo = 20
         self.bs = 32
-        self.lr = k.optimizers.schedules.CosineDecay(0.0, 5000, alpha=1e-4, warmup_target=8e-4, warmup_steps=1000)
+        self.lr = k.optimizers.schedules.CosineDecay(0.0, 50000, alpha=1e-3, warmup_target=1e-4, warmup_steps=10000)
         self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.AdamW(self.lr, global_clipnorm=1.))
         # self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
@@ -80,7 +81,12 @@ class atari_trainer():
         epiScore = 0
         observation, info = self.env[eipNo].reset()
         observation = (np.array(observation) - 128.0)/128.0
-        rewardBuffer = []  # the reward of an action will be counted for 30 steps
+        # the buffer of an action will be counted for self.rewardBufferNo steps
+        rewardBuffer = []  
+        actionBuffer = []
+        actionPBuffer = []
+        obvBuffer = []
+        
         cLives = info['lives']
         # self.greedy *= .99
         # self.greedy = max(self.greedy, 0.02)
@@ -104,6 +110,8 @@ class atari_trainer():
             observation, reward, terminated, truncated, info = self.env[eipNo].step(
                 action)
             observation = (np.array(observation) - 128.0)/128.0
+            actionP = tf.reduce_sum(
+                agentAction * tf.stack([tf.one_hot(action, 6, dtype='bfloat16')], axis=0))
             epiScore += reward
 
             # if the episode over, the parameters will be reset
@@ -115,6 +123,9 @@ class atari_trainer():
                 observation, info = self.env[eipNo].reset()
                 observation = (np.array(observation) - 128.0)/128.0
                 rewardBuffer = []
+                actionBuffer = []
+                actionPBuffer = []
+                obvBuffer = []
                 cLives = info['lives']
                 epiScore = 0
                 continue
@@ -124,32 +135,40 @@ class atari_trainer():
                 reward = -50
                 cLives = info['lives']
 
-            # append the reward to the reward buffer
+            # append the states to the buffer
+            
             rewardBuffer.append(reward)
-            if (len(rewardBuffer) > 20):
+            actionBuffer.append(action)
+            actionPBuffer.append(actionP)
+            obvBuffer.append(observation)
+            
+            if (len(rewardBuffer) > self.rewardBufferNo):
                 abandentV = rewardBuffer.pop(0)
                 del abandentV
 
             # appending observation into replay buffer. The element limit will be batch size * 100
             # accumulatedReward = np.clip(np.array(rewardBuffer).mean(), -1, 5)
             accumulatedReward = np.array(rewardBuffer).mean()
-            actionP = tf.reduce_sum(
-                agentAction * tf.stack([tf.one_hot(action, 6, dtype='bfloat16')], axis=0))
 
             if (accumulatedReward != 0.0):
-                # self.replayBuffer.append(
-                #     (observation, accumulatedReward, action, actionP.numpy()))
                 self.replayBuffer.append((tf.Variable(observation, dtype='bfloat16'),
                                          tf.Variable(accumulatedReward, dtype='bfloat16'),
                                          tf.Variable(action, dtype='int8'),
                                          actionP))
+                
+            # push more action into replay buffer if the action get a high score
+            traceBack = 30
+            if (accumulatedReward > 10.0):
+                for j in range(4):
+                    for i in range(traceBack):
+                        self.replayBuffer.append(self.replayBuffer[-1 * traceBack])
 
             if (len(self.replayBuffer) > self.bs * 100):
                 abandentV = self.replayBuffer.pop(0)
                 del abandentV
 
         # shuffling the replay buffer
-        #random.shuffle(self.replayBuffer)
+        random.shuffle(self.replayBuffer)
 
     def agent_learning(self):
         obvStacks, rewardStacks, actionStacks, actionPStacks = zip(
