@@ -40,8 +40,8 @@ class atari_trainer():
         self.gameOverTag = False
         # self.samplingEpisodes = 2
         self.greedy = .2
-        self.rewardBufferNo = 20
-        self.bs = 32
+        self.rewardBufferNo = 30
+        self.bs = 64
         self.lr = k.optimizers.schedules.CosineDecay(0.0, 50000, alpha=1e-3, warmup_target=1e-4, warmup_steps=10000)
         self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.AdamW(self.lr, global_clipnorm=1.))
         # self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
@@ -111,7 +111,7 @@ class atari_trainer():
                 action)
             observation = (np.array(observation) - 128.0)/128.0
             actionP = tf.reduce_sum(
-                agentAction * tf.stack([tf.one_hot(action, 6, dtype='bfloat16')], axis=0))
+                agentAction * tf.stack([tf.one_hot(action, 6, dtype='float16')], axis=0))
             epiScore += reward
 
             # if the episode over, the parameters will be reset
@@ -146,49 +146,47 @@ class atari_trainer():
                 abandentV = rewardBuffer.pop(0)
                 del abandentV
 
-            # appending observation into replay buffer. The element limit will be batch size * 100
-            # accumulatedReward = np.clip(np.array(rewardBuffer).mean(), -1, 5)
-            accumulatedReward = np.array(rewardBuffer).mean()
+                # appending observation into replay buffer. The element limit will be batch size * 100
+                # accumulatedReward = np.clip(np.array(rewardBuffer).mean(), -1, 5)
+                accumulatedReward = np.array(rewardBuffer).mean()
 
-            if (accumulatedReward != 0.0):
-                self.replayBuffer.append((tf.Variable(observation, dtype='bfloat16'),
-                                         tf.Variable(accumulatedReward, dtype='bfloat16'),
-                                         tf.Variable(action, dtype='int8'),
-                                         actionP))
-                
-            # push more action into replay buffer if the action get a high score
-            traceBack = 30
-            if (accumulatedReward > 10.0):
-                for j in range(4):
-                    for i in range(traceBack):
-                        self.replayBuffer.append(self.replayBuffer[-1 * traceBack])
+                if (accumulatedReward != 0.0):
+                    self.replayBuffer.append((tf.Variable(obvBuffer.pop(0), dtype='float16'),
+                                            tf.Variable(accumulatedReward, dtype='float16'),
+                                            tf.Variable(actionBuffer.pop(0), dtype='int8'),
+                                            actionPBuffer.pop(0)))
+                    
+                # push more action into replay buffer if the action get a high score
+                if (reward >= 50.0):
+                    for j in range(4):
+                        for i in range(self.rewardBufferNo):
+                            self.replayBuffer.append(self.replayBuffer[-1 * self.rewardBufferNo])
+                            if (len(self.replayBuffer) > self.bs * 100):
+                                abandentV = self.replayBuffer.pop(0)
+                                del abandentV
 
-            if (len(self.replayBuffer) > self.bs * 100):
-                abandentV = self.replayBuffer.pop(0)
-                del abandentV
+                if (len(self.replayBuffer) > self.bs * 100):
+                    abandentV = self.replayBuffer.pop(0)
+                    del abandentV
 
         # shuffling the replay buffer
-        random.shuffle(self.replayBuffer)
+        # random.shuffle(self.replayBuffer)
 
     def agent_learning(self):
         obvStacks, rewardStacks, actionStacks, actionPStacks = zip(
             *self.replayBuffer)
-        #obvStacks = (i[0] for i in self.replayBuffer)
-        #rewardStacks = (i[1] for i in self.replayBuffer)
-        #actionStacks = (i[2] for i in self.replayBuffer)
-        #actionPStacks = (i[3] for i in self.replayBuffer)
 
-        with tf.device('/GPU:1'):
+        with tf.device('/GPU:0'):
             stateDataset = tf.data.Dataset.from_tensor_slices(
                 (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
             stateDataset = stateDataset.batch(
-                self.bs, drop_remainder=True).repeat(1).shuffle(32000)
+                self.bs, drop_remainder=True).repeat(5).shuffle(32000)
 
         for state in stateDataset:
             # policy gradient training
             obvStack = state[0]
             rewardStack = state[1]
-            actionStack = tf.one_hot(tf.stack(state[2], axis=0), 6, dtype="bfloat16")
+            actionStack = tf.one_hot(tf.stack(state[2], axis=0), 6, dtype="float16")
             actionPStack = state[3]
 
             cLoss = self.update_agent_weights(
@@ -211,8 +209,8 @@ class atari_trainer():
                 under = actionPStack
                 upper = tf.math.reduce_max(
                     predicts * actionStack, axis=-1)
-                iSampling = tf.cast(upper/under, dtype='bfloat16')
-                clippedReward = tf.clip_by_value(tf.cast(rewardStack, dtype='bfloat16') * tf.stop_gradient(iSampling), -1, 5)
+                iSampling = tf.cast(upper/under, dtype='float16')
+                clippedReward = tf.clip_by_value(tf.cast(rewardStack, dtype='float16') * tf.stop_gradient(iSampling), -100, 500)
 
                 ce = tf.reduce_sum(
                     # actionStack * -tf.math.log(predicts + 1e-6), axis=-1)
@@ -228,7 +226,8 @@ class atari_trainer():
 
 
 def main():
-    k.mixed_precision.set_global_policy('mixed_bfloat16')
+    # k.mixed_precision.set_global_policy('mixed_float16')
+    k.mixed_precision.set_global_policy('float16')
     ag = agent()
     env = atari_trainer(ag, epiNo=5, cloneAgFunc=agent)
 
