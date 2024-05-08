@@ -40,8 +40,8 @@ class atari_trainer():
         self.gameOverTag = False
         # self.samplingEpisodes = 2
         self.greedy = .2
-        self.rewardBufferNo = 30
-        self.bs = 64
+        self.rewardBufferNo = 10
+        self.bs = 32
         self.lr = k.optimizers.schedules.CosineDecay(0.0, 50000, alpha=1e-3, warmup_target=1e-4, warmup_steps=10000)
         self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.AdamW(self.lr, global_clipnorm=1.))
         # self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
@@ -180,7 +180,7 @@ class atari_trainer():
             stateDataset = tf.data.Dataset.from_tensor_slices(
                 (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
             stateDataset = stateDataset.batch(
-                self.bs, drop_remainder=True).repeat(5).shuffle(32000)
+                self.bs, drop_remainder=True).repeat(2).shuffle(32000)
 
         for state in stateDataset:
             # policy gradient training
@@ -197,6 +197,7 @@ class atari_trainer():
         del actionStacks
         del actionPStacks
         del stateDataset
+        self.replayBuffer = self.replayBuffer.copy()
         
 
     @tf.function(jit_compile=True)
