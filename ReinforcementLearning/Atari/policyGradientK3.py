@@ -292,7 +292,7 @@ class atari_trainer():
                 stateDataset = tf.data.Dataset.from_tensor_slices(
                     (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
                 stateDataset = stateDataset.batch(
-                    self.bs, drop_remainder=False).repeat(2).shuffle(32000)
+                    self.bs, drop_remainder=True).repeat(2).shuffle(32000)
 
             for state in stateDataset:
                 # policy gradient training
@@ -316,6 +316,10 @@ class atari_trainer():
         with tf.device('/GPU:0'):
             with tf.GradientTape() as grad:
                 predicts = self.agent(obvStack)
+                
+                # counting the action ce between batch
+                actionCE = -k.ops.sum(
+                    predicts[0:int(self.bs/2)] * k.ops.log(predicts[int(self.bs/2):])) / self.bs
 
                 # importance sampling
                 under = actionPStack
@@ -323,6 +327,7 @@ class atari_trainer():
                     predicts * actionStack, axis=-1)
                 iSampling = tf.cast(upper/under, dtype='float16')
                 clippedReward = tf.clip_by_value(tf.cast(rewardStack, dtype='float16') * tf.stop_gradient(iSampling), -100, 500)
+                clippedReward += actionCE
 
                 ce = tf.reduce_sum(
                     actionStack * -tf.math.log(tf.clip_by_value(predicts, 1e-6, 1.)), axis=-1)
@@ -340,7 +345,7 @@ def main():
     # k.mixed_precision.set_global_policy('mixed_float16')
     k.mixed_precision.set_global_policy('float16')
     ag = agent()
-    env = atari_trainer(ag, epiNo=5, cloneAgFunc=agent)
+    env = atari_trainer(ag, epiNo=2, cloneAgFunc=agent)
 
     while (1):
         env.pooling_sampling()
