@@ -94,7 +94,7 @@ class atari_trainer():
         # self.env = gym.make('SpaceInvaders-v4', render_mode='human')
         self.gameOverTag = False
         self.greedy = .02
-        self.rewardBufferNo = 20
+        self.rewardBufferNo = 50
         self.bs = 32
         self.lr = k.optimizers.schedules.CosineDecay(0.0, 50000, alpha=1e-3, warmup_target=1e-4, warmup_steps=1000)
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.AdamW(self.lr, global_clipnorm=1.))
@@ -212,8 +212,8 @@ class atari_trainer():
                 # accumulatedReward = np.clip(np.array(rewardBuffer).mean(), -1, 5)
                 accumulatedReward = np.array(rewardBuffer).mean()
 
-                # if (accumulatedReward != 0.0):
-                if (reward != 0.0):
+                if (accumulatedReward != 0.0):
+                # if (reward != 0.0):
                     localReplayBuffer.append((tf.Variable(obvBuffer[0], dtype='float16'),
                                             tf.Variable(accumulatedReward, dtype='float16'),
                                             tf.Variable(actionBuffer[0], dtype='int8'),
@@ -314,7 +314,7 @@ class atari_trainer():
 
                 ce = tf.reduce_sum(
                     actionStack * -tf.math.log(tf.clip_by_value(predicts, 1e-6, 1.)), axis=-1)
-                policy_ce = tf.reduce_mean(clippedReward * ce )
+                policy_ce = tf.reduce_mean(clippedReward * ce * rewardWeight)
 
                 gradients = grad.gradient(
                     policy_ce + tf.reduce_sum(self.agent.losses) , self.agent.trainable_variables)
