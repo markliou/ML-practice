@@ -10,13 +10,13 @@ import threading
 import multiprocessing as mp
 import timeit
 
-from keras_nlp.src.backend import ops
+from keras import ops
 
 
 class RMSNormalization(k.layers.Layer):
-    # from keras-nlp website: 
+    # from keras-nlp website:
     # https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/src/models/gemma/rms_normalization.py
-    
+
     def __init__(self, epsilon=1e-6, **kwargs):
         super().__init__(**kwargs)
         self.epsilon = epsilon
@@ -90,8 +90,8 @@ def agent():
 class atari_trainer():
     def __init__(self, agent, epiNo, cloneAgFunc):
         self.samplingEpisodes = epiNo
-        self.env = [gym.make('SpaceInvaders-v4') for i in range(self.samplingEpisodes)]
-        # self.env = gym.make('SpaceInvaders-v4', render_mode='human')
+        #self.env = [gym.make('SpaceInvaders-v4') for i in range(self.samplingEpisodes)]
+        self.env = gym.make('SpaceInvaders-v4', render_mode='human')
         self.gameOverTag = False
         self.greedy = .02
         self.rewardBufferNo = 50
@@ -110,26 +110,26 @@ class atari_trainer():
     def pooling_sampling(self):
         self.greedy *= .99
         self.greedy = max(self.greedy, 0.02)
-        
+
         start = timeit.default_timer()
-        
+
         # # multi thread
         # gameEnv = []
-        # # fire the threading 
+        # # fire the threading
         # for cEpi in range(self.samplingEpisodes):
         #     gameEnv.append(threading.Thread(target = self.sampling, args = (cEpi,)))
         #     # gameEnv.append(mp.Process(target = self.sampling, args = (cEpi,)))
         #     gameEnv[cEpi].start()
-            
+
         # # collecting the threading
         # for cEpi in range(self.samplingEpisodes):
         #     gameEnv[cEpi].join()
-        
+
         # single thread
         for cEpi in range(self.samplingEpisodes):
             self.sampling(cEpi)
-            
-        print('Epi Sampling Time: ', timeit.default_timer() - start)  
+
+        print('Epi Sampling Time: ', timeit.default_timer() - start)
 
     def sampling(self, eipNo):
         # cloneModel = self.cloneAg[eipNo]
@@ -139,12 +139,12 @@ class atari_trainer():
         observation, info = self.env[eipNo].reset()
         observation = (np.array(observation) - 128.0)/128.0
         # the buffer of an action will be counted for self.rewardBufferNo steps
-        rewardBuffer = []  
+        rewardBuffer = []
         actionBuffer = []
         actionPBuffer = []
         obvBuffer = []
         localReplayBuffer = []
-        
+
         cLives = info['lives']
         # self.greedy *= .99
         # self.greedy = max(self.greedy, 0.02)
@@ -177,7 +177,7 @@ class atari_trainer():
                 # show the sampling process information
                 print(
                     f'Episode:{eipNo}/{self.samplingEpisodes} score:{epiScore} greedy:{self.greedy}')
-                
+
                 if epiScore > 400:
                     self.hScoreReplayBuffer += localReplayBuffer
 
@@ -198,12 +198,12 @@ class atari_trainer():
                 cLives = info['lives']
 
             # append the states to the buffer
-            
+
             rewardBuffer.append(reward)
             actionBuffer.append(action)
             actionPBuffer.append(actionP)
             obvBuffer.append(observation)
-            
+
             if (len(rewardBuffer) > self.rewardBufferNo):
                 abandentV = rewardBuffer.pop(0)
                 del abandentV
@@ -222,8 +222,8 @@ class atari_trainer():
                                             tf.Variable(accumulatedReward, dtype='float16'),
                                             tf.Variable(actionBuffer.pop(0), dtype='int8'),
                                             actionPBuffer.pop(0)))
-                    
-                    
+
+
                 # push more action into replay buffer if the action get a high score
                 if (reward >= 50.0):
                     for j in range(3):
@@ -270,7 +270,7 @@ class atari_trainer():
         del actionPStacks
         del stateDataset
         self.replayBuffer = self.replayBuffer.copy()
-        
+
         # training more on hight score recorders
         if(len(self.hScoreReplayBuffer) > 0):
             obvStacks, rewardStacks, actionStacks, actionPStacks = zip(
@@ -327,7 +327,8 @@ class atari_trainer():
 def main():
     # k.mixed_precision.set_global_policy('mixed_float16')
     k.mixed_precision.set_global_policy('float16')
-    ag = agent()
+    #ag = agent(
+    ag = k.saving.load_model("si_agent.keras")
     env = atari_trainer(ag, epiNo=5, cloneAgFunc=agent)
 
     while (1):
