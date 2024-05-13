@@ -13,13 +13,25 @@ import timeit
 from keras import ops
 
 
+@k.saving.register_keras_serializable(name="RMSNormalization")
 class RMSNormalization(k.layers.Layer):
     # from keras-nlp website:
     # https://github.com/keras-team/keras-nlp/blob/master/keras_nlp/src/models/gemma/rms_normalization.py
+    # guide: https://keras.io/guides/serialization_and_saving/#config_methods
 
     def __init__(self, epsilon=1e-6, **kwargs):
         super().__init__(**kwargs)
         self.epsilon = epsilon
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"epsilon": self.epsilon})
+        return config
+
+    # @classmethod
+    # def from_config(cls, config):
+    #     # Note that you can also use [`keras.saving.deserialize_keras_object`](/api/models/model_saving_apis/serialization_utils#deserializekerasobject-function) here
+    #     return cls(**config)
 
     def build(self, input_shape):
         self.scale = self.add_weight(
@@ -43,19 +55,19 @@ def agent():
     x = k.Input([210, 160, 3])
     conv1 = k.layers.Conv2D(32, [7, 7], strides=[
                             2, 2], padding="SAME", kernel_regularizer=k.regularizers.L2(1e-4), activation=k.activations.mish)(x)
-    conv1 = k.layers.LayerNormalization(rms_scaling=True)(conv1)
+    conv1 = k.layers.LayerNormalization()(conv1)
     # conv1 = RMSNormalization()(conv1)
     conv2 = k.layers.Conv2D(64, [5, 5], strides=[
                             2, 2], padding="SAME", kernel_regularizer=k.regularizers.L2(1e-4), activation=k.activations.mish)(conv1)
-    conv2 = k.layers.LayerNormalization(rms_scaling=True)(conv2)
+    conv2 = k.layers.LayerNormalization()(conv2)
     # conv2 = RMSNormalization()(conv2)
     conv3 = k.layers.Conv2D(128, [5, 5], strides=[
                             2, 2], padding="SAME", kernel_regularizer=k.regularizers.L2(1e-4), activation=k.activations.mish)(conv2)
-    conv3 = k.layers.LayerNormalization(rms_scaling=True)(conv3)
+    conv3 = k.layers.LayerNormalization()(conv3)
     # conv3 = RMSNormalization()(conv3)
     conv4 = k.layers.Conv2D(256, [3, 3], strides=[
                             2, 2], padding="SAME", kernel_regularizer=k.regularizers.L2(1e-4), activation=k.activations.mish)(conv3)
-    conv4 = k.layers.LayerNormalization(rms_scaling=True)(conv4)
+    conv4 = k.layers.LayerNormalization()(conv4)
     # conv4 = RMSNormalization()(conv4)
     conv5 = k.layers.Conv2D(512, [3, 3], strides=[
                             1, 1], padding="SAME", kernel_regularizer=k.regularizers.L2(1e-4), activation=k.activations.mish)(conv4)
@@ -83,23 +95,23 @@ def agent():
     f7 = k.layers.Dense(1024, kernel_regularizer=k.regularizers.L2(1e-4), activation=k.activations.mish)(f6)
     # f7 = k.layers.LayerNormalization(rms_scaling=True)(f7)
     f7 = RMSNormalization()(f7)
-    out = k.layers.Dense(6, tf.nn.softmax)(f7)
+    out = k.layers.Dense(6, k.activations.softmax)(f7)
 
     return k.Model(x, out)
 
 class atari_trainer():
     def __init__(self, agent, epiNo, cloneAgFunc):
         self.samplingEpisodes = epiNo
-        #self.env = [gym.make('SpaceInvaders-v4') for i in range(self.samplingEpisodes)]
-        self.env = gym.make('SpaceInvaders-v4', render_mode='human')
+        self.env = [gym.make('SpaceInvaders-v4') for i in range(self.samplingEpisodes)]
+        #self.env = [gym.make('SpaceInvaders-v4', render_mode='human') for i in range(self.samplingEpisodes)]
         self.gameOverTag = False
         self.greedy = .02
         self.rewardBufferNo = 50
         self.bs = 32
         self.lr = k.optimizers.schedules.CosineDecay(0.0, 50000, alpha=1e-3, warmup_target=1e-4, warmup_steps=1000)
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.AdamW(self.lr, global_clipnorm=1.))
-        # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(self.lr, global_clipnorm=1.))
-        self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.SGD(1e-3, momentum=0.9, global_clipnorm=1.))
+        self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(self.lr, rho = .5, global_clipnorm=1.))
+        # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.SGD(1e-3, momentum=0.9, global_clipnorm=1.))
         # self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
         # self.cloneAg = [cloneAgFunc() for i in range(epiNo)]
