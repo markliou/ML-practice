@@ -105,7 +105,7 @@ class atari_trainer():
         self.env = [gym.make('SpaceInvaders-v4') for i in range(self.samplingEpisodes)]
         #self.env = [gym.make('SpaceInvaders-v4', render_mode='human') for i in range(self.samplingEpisodes)]
         self.gameOverTag = False
-        self.greedy = .02
+        self.greedy = .2
         self.rewardBufferNo = 50
         self.bs = 32
         self.lr = k.optimizers.schedules.CosineDecay(0.0, 50000, alpha=1e-3, warmup_target=1e-4, warmup_steps=1000)
@@ -165,10 +165,11 @@ class atari_trainer():
         while (terminated != True):
             observation = (np.array(observation) - 128.0)/128.0
 
-            # greedy sampling
+            # greedy sampling for actions
             agentAction = cloneModel(tf.reshape(observation, [1, 210, 160, 3]))
             if np.random.random() < self.greedy:
                 action = self.env[eipNo].action_space.sample()
+                # action = np.random.randint(4,size=1)[0]
                 self.greedyFlag = True
             else:
                 action = np.argmax(agentAction)
@@ -177,12 +178,19 @@ class atari_trainer():
             # print(f"action: {action}")
 
             # interaction with atari
+            preObservation = observation # for keeping the transition information
             observation, reward, terminated, truncated, info = self.env[eipNo].step(
                 action)
             observation = (np.array(observation) - 128.0)/128.0
             actionP = tf.reduce_sum(
                 agentAction * tf.stack([tf.one_hot(action, 6, dtype='float16')], axis=0))
             epiScore += reward
+            
+            ## using the transition information
+            ### 觀察機體有沒有移動，有移動的分數給高一些
+            reward += np.sum(np.abs(observation[180:195,:] - preObservation[180:195,:])) # 檢查全域是否有移動
+            reward += np.sum(np.abs(observation[180:195,30:60] - preObservation[180:195,30:60])) # 僅檢查中央部分，如果在中央部分移動就給予高一點的分數
+            reward += np.sum(np.abs(observation[180:195,30:60])) # 看戰機有沒有落在中央部分。因為背景是黑色，所以就把有顏色的當作戰機
 
             # if the episode over, the parameters will be reset
             if (terminated == True):
@@ -236,14 +244,14 @@ class atari_trainer():
                                             actionPBuffer.pop(0)))
 
 
-                # push more action into replay buffer if the action get a high score
-                if (reward >= 50.0):
-                    for j in range(3):
-                        for i in range(self.rewardBufferNo):
-                            self.replayBuffer.append(self.replayBuffer[-1 * self.rewardBufferNo])
-                            if (len(self.replayBuffer) > self.bs * 100):
-                                abandentV = self.replayBuffer.pop(0)
-                                del abandentV
+                # # push more action into replay buffer if the action get a high score
+                # if (reward >= 50.0):
+                #     for j in range(3):
+                #         for i in range(self.rewardBufferNo):
+                #             self.replayBuffer.append(self.replayBuffer[-1 * self.rewardBufferNo])
+                #             if (len(self.replayBuffer) > self.bs * 100):
+                #                 abandentV = self.replayBuffer.pop(0)
+                #                 del abandentV
 
                 if (len(self.replayBuffer) > self.bs * 100):
                     abandentV = self.replayBuffer.pop(0)
@@ -258,7 +266,7 @@ class atari_trainer():
 
     def agent_learning(self):
         obvStacks, rewardStacks, actionStacks, actionPStacks = zip(
-            *(self.replayBuffer + self.hScoreReplayBuffer))
+            *(self.replayBuffer))
 
         with tf.device('/GPU:0'):
             stateDataset = tf.data.Dataset.from_tensor_slices(
@@ -316,29 +324,54 @@ class atari_trainer():
         with tf.device('/GPU:0'):
             with tf.GradientTape() as grad:
                 predicts = self.agent(obvStack)
+                
+                # # croping the agent position in the image => this doesn't make sense
+                # agentPos = k.layers.Cropping2D(cropping=((180, 15), (0, 0)))(obvStack)
+                # agentPosDiff = k.ops.mean(k.ops.absolute(agentPos[0:int(self.bs/2)] - agentPos[int(self.bs/2):]))
+                
+                # # watching the action (on-policy)
+                # maskedPredictsLROnPolicy = k.ops.sum(k.ops.cast(tf.one_hot(k.ops.argmax(predicts), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
+                #                              tf.constant([0,0,1,1,0,0], dtype=k.mixed_precision.dtype_policy().variable_dtype), axis=-1) * rewardWeight
+                maskedPredictsLROnPolicy = 0.
 
-                # counting the action ce between batch
+                # counting the action ce between batch (on-policy, MC)
                 actionCE = -k.ops.sum(
-                    predicts[0:int(self.bs/2)] * k.ops.log(predicts[int(self.bs/2):])) / self.bs
+                    k.ops.cast(tf.one_hot(k.ops.argmax(predicts[0:int(self.bs/2)]), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
+                    k.ops.log(k.ops.clip(predicts[int(self.bs/2):], 1e-6, 1)) + 
+                    k.ops.cast(tf.one_hot(k.ops.argmax(predicts[int(self.bs/2):]), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
+                    k.ops.log(k.ops.clip(predicts[0:int(self.bs/2)], 1e-6, 1))
+                    ) / self.bs
+                
+                on_policy_action_ce = tf.reduce_sum(
+                    k.ops.cast(tf.one_hot(k.ops.argmax(predicts), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
+                    -tf.math.log(tf.clip_by_value(predicts, 1e-6, 1.)), axis=-1)
+                on_policy_ce = tf.reduce_mean(actionCE * on_policy_action_ce + maskedPredictsLROnPolicy * on_policy_action_ce)
 
-                # importance sampling
+                # importance sampling (off-policy)
                 under = actionPStack
                 upper = tf.math.reduce_max(
                     predicts * actionStack, axis=-1)
                 iSampling = tf.cast(upper/under, dtype='float16')
                 clippedReward = tf.clip_by_value(tf.cast(rewardStack, dtype='float16') * tf.stop_gradient(iSampling), -100, 500)
-                clippedReward += actionCE
+                clippedReward *= rewardWeight
+                
+                # # watching the action (off-policy)
+                # maskedPredictsLROffPolicy = k.ops.sum(
+                #     (actionStack * tf.constant([0,0,1,1,0,0], dtype=k.mixed_precision.dtype_policy().variable_dtype)), axis=-1) * tf.stop_gradient(iSampling)
+                maskedPredictsLROffPolicy = 0.
 
-                ce = tf.reduce_sum(
+                off_policy_action_ce = tf.reduce_sum(
                     actionStack * -tf.math.log(tf.clip_by_value(predicts, 1e-6, 1.)), axis=-1)
-                policy_ce = tf.reduce_mean(clippedReward * ce * rewardWeight)
+                off_policy_ce = tf.reduce_mean(clippedReward * off_policy_action_ce + maskedPredictsLROffPolicy * off_policy_action_ce)
+                
+                total_loss = on_policy_ce + off_policy_ce
 
                 gradients = grad.gradient(
-                    policy_ce + tf.reduce_sum(self.agent.losses) , self.agent.trainable_variables)
+                    total_loss + tf.reduce_sum(self.agent.losses) , self.agent.trainable_variables)
                 self.optimizer.apply(
                     gradients, self.agent.trainable_variables)
 
-        return policy_ce
+        return total_loss
 
 
 def main():
