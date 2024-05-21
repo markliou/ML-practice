@@ -110,8 +110,9 @@ class atari_trainer():
         self.bs = 32
         self.lr = k.optimizers.schedules.CosineDecay(0.0, 50000, alpha=1e-3, warmup_target=1e-4, warmup_steps=1000)
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.AdamW(self.lr, global_clipnorm=1.))
-        self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(self.lr, rho = .5, global_clipnorm=1.))
+        # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(self.lr, rho = .5, global_clipnorm=1.))
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.SGD(1e-3, momentum=0.9, global_clipnorm=1.))
+        self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(1e-4, rho = .2, global_clipnorm=1.))
         # self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
         # self.cloneAg = [cloneAgFunc() for i in range(epiNo)]
@@ -188,9 +189,19 @@ class atari_trainer():
             
             ## using the transition information
             ### 觀察機體有沒有移動，有移動的分數給高一些
-            reward += np.sum(np.abs(observation[180:195,:] - preObservation[180:195,:])) # 檢查全域是否有移動
-            reward += np.sum(np.abs(observation[180:195,30:60] - preObservation[180:195,30:60])) # 僅檢查中央部分，如果在中央部分移動就給予高一點的分數
-            reward += np.sum(np.abs(observation[180:195,30:60])) # 看戰機有沒有落在中央部分。因為背景是黑色，所以就把有顏色的當作戰機
+            
+            # 給定位置spectrum，吸引戰機往中央位置移動
+            positionSpec = 1/(1 + np.exp(np.array(
+                                            [1e-6 for score in range(40)]+
+                                            [score / 40. for score in range(40)]+
+                                            [score / 40. for score in range(39,-1, -1)] +
+                                            [1e-6 for score in range(40)]
+                                            ) * -1)
+                                            ) 
+            
+            reward += np.mean(np.abs(observation[180:195,:] - preObservation[180:195,:]) * positionSpec.reshape([1,160,1])) # 檢查全域是否有移動
+            # reward += np.mean(np.abs(observation[180:195,40:120] - preObservation[180:195,40:120])) # 僅檢查中央部分，如果在中央部分移動就給予高一點的分數
+            reward += np.mean(np.abs(observation[180:195,60:100]) * positionSpec[60:100].reshape([1,40,1])) # 看戰機有沒有落在中央部分。因為背景是黑色，所以就把有顏色的當作戰機
 
             # if the episode over, the parameters will be reset
             if (terminated == True):
@@ -282,7 +293,7 @@ class atari_trainer():
             actionPStack = state[3]
 
             cLoss = self.update_agent_weights(
-                obvStack, rewardStack, actionStack, actionPStack, 1e-2)
+                obvStack, rewardStack, actionStack, actionPStack, 0.1)
             print(f"loss:{cLoss}")
         del obvStacks
         del rewardStacks
@@ -335,12 +346,13 @@ class atari_trainer():
                 maskedPredictsLROnPolicy = 0.
 
                 # counting the action ce between batch (on-policy, MC)
-                actionCE = -k.ops.sum(
-                    k.ops.cast(tf.one_hot(k.ops.argmax(predicts[0:int(self.bs/2)]), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
-                    k.ops.log(k.ops.clip(predicts[int(self.bs/2):], 1e-6, 1)) + 
-                    k.ops.cast(tf.one_hot(k.ops.argmax(predicts[int(self.bs/2):]), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
-                    k.ops.log(k.ops.clip(predicts[0:int(self.bs/2)], 1e-6, 1))
-                    ) / self.bs
+                # actionCE = -k.ops.sum(
+                #     k.ops.cast(tf.one_hot(k.ops.argmax(predicts[0:int(self.bs/2)]), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
+                #     k.ops.log(k.ops.clip(predicts[int(self.bs/2):], 1e-6, 1)) + 
+                #     k.ops.cast(tf.one_hot(k.ops.argmax(predicts[int(self.bs/2):]), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
+                #     k.ops.log(k.ops.clip(predicts[0:int(self.bs/2)], 1e-6, 1))
+                #     ) 
+                actionCE = 0.
                 
                 on_policy_action_ce = tf.reduce_sum(
                     k.ops.cast(tf.one_hot(k.ops.argmax(predicts), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
@@ -378,8 +390,8 @@ def main():
     # k.mixed_precision.set_global_policy('mixed_float16')
     k.mixed_precision.set_global_policy('float16')
 
-    ag = agent()
-    # ag = k.saving.load_model("si_agent.keras")
+    # ag = agent()
+    ag = k.saving.load_model("si_agent.keras")
     env = atari_trainer(ag, epiNo=2, cloneAgFunc=agent)
 
     while (1):
