@@ -164,8 +164,6 @@ class atari_trainer():
         terminated = False
 
         while (terminated != True):
-            observation = (np.array(observation) - 128.0)/128.0
-
             # greedy sampling for actions
             agentAction = cloneModel(tf.reshape(observation, [1, 210, 160, 3]))
             if np.random.random() < self.greedy:
@@ -182,7 +180,7 @@ class atari_trainer():
             preObservation = observation # for keeping the transition information
             observation, reward, terminated, truncated, info = self.env[eipNo].step(
                 action)
-            observation = (np.array(observation) - 128.0)/128.0
+            observation = (np.array(observation) - 128.0)/128.0 * .5 + preObservation * .5
             actionP = tf.reduce_sum(
                 agentAction * tf.stack([tf.one_hot(action, 6, dtype='float16')], axis=0))
             epiScore += reward
@@ -191,17 +189,18 @@ class atari_trainer():
             ### 觀察機體有沒有移動，有移動的分數給高一些
             
             # 給定位置spectrum，吸引戰機往中央位置移動
-            positionSpec = 1/(1 + np.exp(np.array(
-                                            [1e-6 for score in range(40)]+
-                                            [score / 40. for score in range(40)]+
-                                            [score / 40. for score in range(39,-1, -1)] +
-                                            [1e-6 for score in range(40)]
-                                            ) * -1)
-                                            ) 
+            positionSpec = np.tanh(np.array(
+                                            [0 for score in range(40)]+
+                                            [(score * 2) / 40. for score in range(40)]+
+                                            [(score * 2) / 40. for score in range(39,-1, -1)] +
+                                            [0 for score in range(40)]
+                                            ))
             
-            reward += np.mean(np.abs(observation[180:195,:] - preObservation[180:195,:]) * positionSpec.reshape([1,160,1])) # 檢查全域是否有移動
+            reward += np.mean((np.abs(observation[180:195,:] - preObservation[180:195,:]) - 0.0078125) * positionSpec.reshape([1,160,1])) # 檢查全域是否有移動
             # reward += np.mean(np.abs(observation[180:195,40:120] - preObservation[180:195,40:120])) # 僅檢查中央部分，如果在中央部分移動就給予高一點的分數
-            reward += np.mean(np.abs(observation[180:195,60:100]) * positionSpec[60:100].reshape([1,40,1])) # 看戰機有沒有落在中央部分。因為背景是黑色，所以就把有顏色的當作戰機
+            # reward += np.mean(np.abs(observation[180:195,60:100]) * positionSpec[60:100].reshape([1,40,1])) # 看戰機有沒有落在中央部分。因為背景是黑色，所以就把有顏色的當作戰機
+            # reward += np.mean(np.abs(observation[180:195,:]) * positionSpec.reshape([1,160,1])) # 看戰機有沒有落在中央部分。因為背景是黑色，所以就把有顏色的當作戰機
+            
 
             # if the episode over, the parameters will be reset
             if (terminated == True):
@@ -293,7 +292,7 @@ class atari_trainer():
             actionPStack = state[3]
 
             cLoss = self.update_agent_weights(
-                obvStack, rewardStack, actionStack, actionPStack, 0.1)
+                obvStack, rewardStack, actionStack, actionPStack, 1.)
             print(f"loss:{cLoss}")
         del obvStacks
         del rewardStacks
@@ -390,8 +389,8 @@ def main():
     # k.mixed_precision.set_global_policy('mixed_float16')
     k.mixed_precision.set_global_policy('float16')
 
-    # ag = agent()
-    ag = k.saving.load_model("si_agent.keras")
+    ag = agent()
+    # ag = k.saving.load_model("si_agent.keras")
     env = atari_trainer(ag, epiNo=2, cloneAgFunc=agent)
 
     while (1):
