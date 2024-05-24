@@ -105,14 +105,14 @@ class atari_trainer():
         self.env = [gym.make('SpaceInvaders-v4') for i in range(self.samplingEpisodes)]
         #self.env = [gym.make('SpaceInvaders-v4', render_mode='human') for i in range(self.samplingEpisodes)]
         self.gameOverTag = False
-        self.greedy = .2
+        self.greedy = .02
         self.rewardBufferNo = 50
         self.bs = 32
         self.lr = k.optimizers.schedules.CosineDecay(0.0, 50000, alpha=1e-3, warmup_target=1e-4, warmup_steps=1000)
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.AdamW(self.lr, global_clipnorm=1.))
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(self.lr, rho = .5, global_clipnorm=1.))
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.SGD(1e-3, momentum=0.9, global_clipnorm=1.))
-        self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(1e-4, rho = .2, global_clipnorm=1.))
+        self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(1e-4, rho = .6, global_clipnorm=1.))
         # self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
         # self.cloneAg = [cloneAgFunc() for i in range(epiNo)]
@@ -180,7 +180,7 @@ class atari_trainer():
             preObservation = observation # for keeping the transition information
             observation, reward, terminated, truncated, info = self.env[eipNo].step(
                 action)
-            observation = (np.array(observation) - 128.0)/128.0 * .5 + preObservation * .5
+            observation = (np.array(observation) - 128.0)/128.0 * .5 + preObservation * .5 
             actionP = tf.reduce_sum(
                 agentAction * tf.stack([tf.one_hot(action, 6, dtype='float16')], axis=0))
             epiScore += reward
@@ -199,9 +199,8 @@ class atari_trainer():
             reward += np.mean((np.abs(observation[180:195,:] - preObservation[180:195,:]) - 0.0078125) * positionSpec.reshape([1,160,1])) # 檢查全域是否有移動
             # reward += np.mean(np.abs(observation[180:195,40:120] - preObservation[180:195,40:120])) # 僅檢查中央部分，如果在中央部分移動就給予高一點的分數
             # reward += np.mean(np.abs(observation[180:195,60:100]) * positionSpec[60:100].reshape([1,40,1])) # 看戰機有沒有落在中央部分。因為背景是黑色，所以就把有顏色的當作戰機
-            # reward += np.mean(np.abs(observation[180:195,:]) * positionSpec.reshape([1,160,1])) # 看戰機有沒有落在中央部分。因為背景是黑色，所以就把有顏色的當作戰機
+            reward += np.mean(np.abs(observation[180:195,:]) * positionSpec.reshape([1,160,1])) - 0.302114693102719 # 看戰機有沒有落在中央部分。因為背景是黑色，所以就把有顏色的當作戰機
             
-
             # if the episode over, the parameters will be reset
             if (terminated == True):
                 # show the sampling process information
@@ -301,33 +300,33 @@ class atari_trainer():
         del stateDataset
         self.replayBuffer = self.replayBuffer.copy()
 
-        # training more on hight score recorders
-        if(len(self.hScoreReplayBuffer) > 0):
-            obvStacks, rewardStacks, actionStacks, actionPStacks = zip(
-                *(self.hScoreReplayBuffer))
+        # # training more on hight score recorders
+        # if(len(self.hScoreReplayBuffer) > 0):
+        #     obvStacks, rewardStacks, actionStacks, actionPStacks = zip(
+        #         *(self.hScoreReplayBuffer))
 
-            with tf.device('/GPU:0'):
-                stateDataset = tf.data.Dataset.from_tensor_slices(
-                    (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
-                stateDataset = stateDataset.batch(
-                    self.bs, drop_remainder=True).repeat(2).shuffle(32000)
+        #     with tf.device('/GPU:0'):
+        #         stateDataset = tf.data.Dataset.from_tensor_slices(
+        #             (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
+        #         stateDataset = stateDataset.batch(
+        #             self.bs, drop_remainder=True).repeat(2).shuffle(32000)
 
-            for state in stateDataset:
-                # policy gradient training
-                obvStack = state[0]
-                rewardStack = state[1]
-                actionStack = tf.one_hot(tf.stack(state[2], axis=0), 6, dtype="float16")
-                actionPStack = state[3]
+        #     for state in stateDataset:
+        #         # policy gradient training
+        #         obvStack = state[0]
+        #         rewardStack = state[1]
+        #         actionStack = tf.one_hot(tf.stack(state[2], axis=0), 6, dtype="float16")
+        #         actionPStack = state[3]
 
-                cLoss = self.update_agent_weights(
-                    obvStack, rewardStack, actionStack, actionPStack, 1.)
-                print(f"loss:{cLoss}")
-            del obvStacks
-            del rewardStacks
-            del actionStacks
-            del actionPStacks
-            del stateDataset
-            self.hScoreReplayBuffer = self.hScoreReplayBuffer.copy()
+        #         cLoss = self.update_agent_weights(
+        #             obvStack, rewardStack, actionStack, actionPStack, 1.)
+        #         print(f"loss:{cLoss}")
+        #     del obvStacks
+        #     del rewardStacks
+        #     del actionStacks
+        #     del actionPStacks
+        #     del stateDataset
+        #     self.hScoreReplayBuffer = self.hScoreReplayBuffer.copy()
 
     @tf.function(jit_compile=True)
     def update_agent_weights(self, obvStack, rewardStack, actionStack, actionPStack, rewardWeight):
@@ -345,18 +344,28 @@ class atari_trainer():
                 maskedPredictsLROnPolicy = 0.
 
                 # counting the action ce between batch (on-policy, MC)
-                # actionCE = -k.ops.sum(
-                #     k.ops.cast(tf.one_hot(k.ops.argmax(predicts[0:int(self.bs/2)]), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
-                #     k.ops.log(k.ops.clip(predicts[int(self.bs/2):], 1e-6, 1)) + 
-                #     k.ops.cast(tf.one_hot(k.ops.argmax(predicts[int(self.bs/2):]), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
-                #     k.ops.log(k.ops.clip(predicts[0:int(self.bs/2)], 1e-6, 1))
-                #     ) 
-                actionCE = 0.
+                actionCE = -k.ops.sum(
+                    k.ops.cast(tf.one_hot(k.ops.argmax(predicts[0:int(self.bs/2)]), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
+                    k.ops.log(k.ops.clip(predicts[int(self.bs/2):], 1e-6, 1)) + 
+                    k.ops.cast(tf.one_hot(k.ops.argmax(predicts[int(self.bs/2):]), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
+                    k.ops.log(k.ops.clip(predicts[0:int(self.bs/2)], 1e-6, 1))
+                    )
+                actionCE += -k.ops.sum(
+                    k.ops.cast(predicts[0:int(self.bs/2)], k.mixed_precision.dtype_policy().variable_dtype) * 
+                    k.ops.log(k.ops.clip(predicts[int(self.bs/2):], 1e-6, 1)) + 
+                    k.ops.cast(predicts[int(self.bs/2):], k.mixed_precision.dtype_policy().variable_dtype) * 
+                    k.ops.log(k.ops.clip(predicts[0:int(self.bs/2)], 1e-6, 1))
+                    ) 
+                # actionCE = 0.
+                
+                # counting the action variance between batch (on-policy, MC)
+                actionVari = tf.clip_by_value(tf.math.reduce_mean(tf.math.reduce_variance(predicts, axis=0)) * 1e4, 0, 5)
+                # actionVari = 0.
                 
                 on_policy_action_ce = tf.reduce_sum(
                     k.ops.cast(tf.one_hot(k.ops.argmax(predicts), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
                     -tf.math.log(tf.clip_by_value(predicts, 1e-6, 1.)), axis=-1)
-                on_policy_ce = tf.reduce_mean(actionCE * on_policy_action_ce + maskedPredictsLROnPolicy * on_policy_action_ce)
+                on_policy_ce = tf.reduce_mean(actionCE * on_policy_action_ce + (maskedPredictsLROnPolicy + actionVari) * on_policy_action_ce)
 
                 # importance sampling (off-policy)
                 under = actionPStack
@@ -389,14 +398,16 @@ def main():
     # k.mixed_precision.set_global_policy('mixed_float16')
     k.mixed_precision.set_global_policy('float16')
 
-    ag = agent()
-    # ag = k.saving.load_model("si_agent.keras")
-    env = atari_trainer(ag, epiNo=2, cloneAgFunc=agent)
+    # ag = agent()
+    ag = k.saving.load_model("si_agent.keras")
 
-    while (1):
-        env.pooling_sampling()
-        env.agent_learning()
-        ag.save("si_agent.keras")
+    while (1): # trying the optimizer restart
+        env = atari_trainer(ag, epiNo=2, cloneAgFunc=agent)
+        for loop_conter in range(20):
+            env.pooling_sampling()
+            env.agent_learning()
+            ag.save("si_agent.keras")
+        del env
 
 
 if __name__ == "__main__":
