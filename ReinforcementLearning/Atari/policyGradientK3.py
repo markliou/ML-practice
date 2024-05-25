@@ -223,7 +223,15 @@ class atari_trainer():
 
             # if the lives reduced, the reward will be minus
             if (info["lives"] < cLives):
-                reward = -50
+                deadP = 1
+                for replayBufferInd in range(self.rewardBufferNo):
+                    element = self.replayBuffer[-replayBufferInd]
+                    self.replayBuffer[-replayBufferInd] = (element[0],
+                                                           element[1] - ((deadP/self.rewardBufferNo) * (self.rewardBufferNo - replayBufferInd)),
+                                                           element[2],
+                                                           element[3]
+                                                           )
+                reward = -(deadP * self.rewardBufferNo)
                 cLives = info['lives']
 
             # append the states to the buffer
@@ -241,7 +249,8 @@ class atari_trainer():
                 # accumulatedReward = np.clip(np.array(rewardBuffer).mean(), -1, 5)
                 accumulatedReward = np.array(rewardBuffer).mean()
 
-                if (accumulatedReward != 0.0):
+                if(True):
+                # if (accumulatedReward != 0.0):
                 # if (reward != 0.0):
                     localReplayBuffer.append((tf.Variable(obvBuffer[0], dtype='float16'),
                                             tf.Variable(accumulatedReward, dtype='float16'),
@@ -392,6 +401,13 @@ class atari_trainer():
                     gradients, self.agent.trainable_variables)
 
         return total_loss
+    
+    def infinity_training(self):
+        while(1):
+            self.pooling_sampling()
+            self.agent_learning()
+            self.agent.save("si_agent.keras")
+
 
 
 def main():
@@ -400,14 +416,15 @@ def main():
 
     # ag = agent()
     ag = k.saving.load_model("si_agent.keras")
+    
+    # env = atari_trainer(ag, epiNo=2, cloneAgFunc=agent)
+    # env.infinity_training()
 
-    while (1): # trying the optimizer restart
-        env = atari_trainer(ag, epiNo=2, cloneAgFunc=agent)
-        for loop_conter in range(20):
-            env.pooling_sampling()
-            env.agent_learning()
-            ag.save("si_agent.keras")
-        del env
+    env = atari_trainer(ag, epiNo=2, cloneAgFunc=agent)
+    for loop_conter in range(20):
+        env.pooling_sampling()
+        env.agent_learning()
+        ag.save("si_agent.keras")
 
 
 if __name__ == "__main__":
