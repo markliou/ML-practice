@@ -455,8 +455,8 @@ def main():
     # k.mixed_precision.set_global_policy('mixed_float16')
     k.mixed_precision.set_global_policy('float16')
 
-    ag = agent()
-    # ag = k.saving.load_model("si_agent.keras")
+    # ag = agent()
+    ag = k.saving.load_model("si_agent.keras")
     
     # env = atari_trainer(ag, epiNo=30, cloneAgFunc=agent)
     # env.infinity_training()
