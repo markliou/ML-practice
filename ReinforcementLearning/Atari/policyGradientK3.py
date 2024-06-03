@@ -73,7 +73,7 @@ def agent():
     conv5 = k.layers.Conv2D(512, [3, 3], strides=[
                             1, 1], padding="SAME", kernel_regularizer=k.regularizers.L2(1e-4), activation=k.activations.mish)(conv4)
     f0 = k.layers.Flatten()(conv5)
-    
+
     # 戰機位置獨立處理
     ag = k.layers.Cropping2D(cropping=((180, 15), (40, 40)))(x)
     conv1_ag = k.layers.Conv2D(32, [7, 7], strides=[
@@ -83,9 +83,9 @@ def agent():
     conv3_ag = k.layers.Conv2D(32, [7, 7], strides=[
                             2, 2], padding="SAME", kernel_regularizer=k.regularizers.L2(1e-4), activation=k.activations.mish)(conv2_ag)
     f0_ag = k.layers.Flatten()(conv3_ag)
-    
+
     f0 = k.layers.Concatenate()([f0, f0_ag])
-    
+
     # 防空區獨立處理
     cau = k.layers.Cropping2D(cropping=((140, 50), (40, 40)))(x)
     conv1_cau = k.layers.Conv2D(32, [7, 7], strides=[
@@ -95,9 +95,9 @@ def agent():
     conv3_cau = k.layers.Conv2D(32, [7, 7], strides=[
                             2, 2], padding="SAME", kernel_regularizer=k.regularizers.L2(1e-4), activation=k.activations.mish)(conv2_cau)
     f0_cau = k.layers.Flatten()(conv3_cau)
-    
+
     f0 = k.layers.Concatenate()([f0, f0_cau])
-    
+
     # f0 =  k.layers.LayerNormalization(rms_scaling=True)(f0)
     f0 = RMSNormalization()(f0)
     f1 = k.layers.Dense(1024, kernel_regularizer=k.regularizers.L2(1e-4), activation=k.activations.mish)(f0)
@@ -215,23 +215,23 @@ class atari_trainer():
             actionP = tf.reduce_sum(
                 agentAction * tf.stack([tf.one_hot(action, 6, dtype='float16')], axis=0))
             epiScore += reward
-            
+
             ## using the transition information
             ### 觀察機體有沒有移動，有移動的分數給高一些
-            
+
             # 給定位置spectrum，吸引戰機往中央位置移動
             positionSpec = (np.array(
                                     [0 for score in range(40)]+
                                     [(score * 2) / 40. for score in range(40)]+
                                     [(score * 2) / 40. for score in range(39,-1, -1)] +
                                     [0 for score in range(40)]
-                                    )) 
-            
+                                    ))
+
             positionReward = np.mean((np.abs(observation[180:195,:] - preObservation[180:195,:]) - 0.0078125) * positionSpec.reshape([1,160,1])) # 檢查全域是否有移動
             # reward += np.mean(np.abs(observation[180:195,40:120] - preObservation[180:195,40:120])) # 僅檢查中央部分，如果在中央部分移動就給予高一點的分數
             # reward += np.mean(np.abs(observation[180:195,60:100]) * positionSpec[60:100].reshape([1,40,1])) # 看戰機有沒有落在中央部分。因為背景是黑色，所以就把有顏色的當作戰機
             # positionReward += 5 * np.mean(np.abs(observation[180:195,:]) * positionSpec.reshape([1,160,1])) - 0.302114693102719 # 看戰機有沒有落在中央部分。因為背景是黑色，所以就把有顏色的當作戰機
-            
+
             # if the episode over, the parameters will be reset
             if (terminated == True):
                 # show the sampling process information
@@ -279,7 +279,7 @@ class atari_trainer():
 
                 # appending observation into replay buffer. The element limit will be batch size * 100
                 # accumulatedReward = np.clip(np.array(rewardBuffer).mean(), -1, 5)
-                accumulatedReward = np.array(rewardBuffer).mean() #+ positionReward 
+                accumulatedReward = np.array(rewardBuffer).mean() #+ positionReward
 
                 if(True):
                 # if (accumulatedReward != 0.0):
@@ -334,18 +334,18 @@ class atari_trainer():
             cLoss = self.update_agent_weights(
                 obvStack, rewardStack, actionStack, actionPStack, 1.)
             print(f"loss:{cLoss}")
-            
+
             del obvStack
             del rewardStack
             del actionStack
             del actionPStack
-                
+
         del obvStacks
         del rewardStacks
         del actionStacks
         del actionPStacks
         del stateDataset
-                    
+
         self.replayBuffer = self.replayBuffer.copy()
 
         # # training more on hight score recorders
@@ -381,43 +381,43 @@ class atari_trainer():
         with tf.device('/GPU:0'):
             with tf.GradientTape() as grad:
                 predicts = self.agent(obvStack)
-                
+
                 ## entropy regularization
                 er = k.ops.mean(k.ops.sum(predicts * tf.math.log(predicts), axis=-1))
-                
+
                 # # croping the agent position in the image => this doesn't make sense
                 # agentPos = k.layers.Cropping2D(cropping=((180, 15), (0, 0)))(obvStack)
                 # agentPosDiff = k.ops.mean(k.ops.absolute(agentPos[0:int(self.bs/2)] - agentPos[int(self.bs/2):]))
-                
+
                 # # watching the action (on-policy)
-                # maskedPredictsLROnPolicy = k.ops.sum(k.ops.cast(tf.one_hot(k.ops.argmax(predicts), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
+                # maskedPredictsLROnPolicy = k.ops.sum(k.ops.cast(tf.one_hot(k.ops.argmax(predicts), 6), k.mixed_precision.dtype_policy().variable_dtype) *
                 #                              tf.constant([0,0,1,1,0,0], dtype=k.mixed_precision.dtype_policy().variable_dtype), axis=-1) * rewardWeight
                 maskedPredictsLROnPolicy = tf.cast(0., k.mixed_precision.dtype_policy().variable_dtype)
 
                 # counting the action ce between batch (on-policy, MC)
                 # actionCE = tf.clip_by_value(
                 #     -k.ops.mean(
-                #     k.ops.cast(tf.one_hot(k.ops.argmax(predicts[0:int(self.bs/2)]), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
-                #     k.ops.log(k.ops.clip(predicts[int(self.bs/2):], 1e-6, 1)) + 
-                #     k.ops.cast(tf.one_hot(k.ops.argmax(predicts[int(self.bs/2):]), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
+                #     k.ops.cast(tf.one_hot(k.ops.argmax(predicts[0:int(self.bs/2)]), 6), k.mixed_precision.dtype_policy().variable_dtype) *
+                #     k.ops.log(k.ops.clip(predicts[int(self.bs/2):], 1e-6, 1)) +
+                #     k.ops.cast(tf.one_hot(k.ops.argmax(predicts[int(self.bs/2):]), 6), k.mixed_precision.dtype_policy().variable_dtype) *
                 #     k.ops.log(k.ops.clip(predicts[0:int(self.bs/2)], 1e-6, 1))
                 #     ),
                 #     0,
                 #     100)
                 # actionCE += -k.ops.mean(
-                #     k.ops.cast(predicts[0:int(self.bs/2)], k.mixed_precision.dtype_policy().variable_dtype) * 
-                #     k.ops.log(k.ops.clip(predicts[int(self.bs/2):], 1e-6, 1)) + 
-                #     k.ops.cast(predicts[int(self.bs/2):], k.mixed_precision.dtype_policy().variable_dtype) * 
+                #     k.ops.cast(predicts[0:int(self.bs/2)], k.mixed_precision.dtype_policy().variable_dtype) *
+                #     k.ops.log(k.ops.clip(predicts[int(self.bs/2):], 1e-6, 1)) +
+                #     k.ops.cast(predicts[int(self.bs/2):], k.mixed_precision.dtype_policy().variable_dtype) *
                 #     k.ops.log(k.ops.clip(predicts[0:int(self.bs/2)], 1e-6, 1))
                 #     )
                 actionCE = tf.cast(0., k.mixed_precision.dtype_policy().variable_dtype)
-                
+
                 # counting the action variance between batch (on-policy, MC)
                 actionVari = tf.math.reduce_mean(tf.math.reduce_variance(predicts, axis=0))
                 # actionVari = tf.cast(0., k.mixed_precision.dtype_policy().variable_dtype)
-                
+
                 on_policy_action_ce = tf.reduce_sum(
-                    k.ops.cast(tf.one_hot(k.ops.argmax(predicts), 6), k.mixed_precision.dtype_policy().variable_dtype) * 
+                    k.ops.cast(tf.one_hot(k.ops.argmax(predicts), 6), k.mixed_precision.dtype_policy().variable_dtype) *
                     -tf.math.log(tf.clip_by_value(predicts, 1e-6, 1.)), axis=-1)
                 on_policy_ce = tf.reduce_mean(tf.stop_gradient(actionCE) * on_policy_action_ce + tf.stop_gradient(maskedPredictsLROnPolicy + actionVari) * on_policy_action_ce)
 
@@ -428,7 +428,7 @@ class atari_trainer():
                 iSampling = tf.cast(upper/under, dtype='float16')
                 clippedReward = tf.clip_by_value(tf.cast(tf.stop_gradient(rewardStack), dtype='float16') * tf.stop_gradient(iSampling), -100, 500)
                 clippedReward *= rewardWeight
-                
+
                 # # watching the action (off-policy)
                 # maskedPredictsLROffPolicy = k.ops.sum(
                 #     (actionStack * tf.constant([0,0,1,1,0,0], dtype=k.mixed_precision.dtype_policy().variable_dtype)), axis=-1) * tf.stop_gradient(iSampling)
@@ -437,7 +437,7 @@ class atari_trainer():
                 off_policy_action_ce = tf.reduce_sum(
                     actionStack * -tf.math.log(tf.clip_by_value(predicts, 1e-6, 1.)), axis=-1)
                 off_policy_ce = tf.reduce_mean(clippedReward * off_policy_action_ce + maskedPredictsLROffPolicy * off_policy_action_ce)
-                
+
                 total_loss = on_policy_ce + off_policy_ce + er * 1e-1
 
                 gradients = grad.gradient(
@@ -446,13 +446,13 @@ class atari_trainer():
                     gradients, self.agent.trainable_variables)
 
         return total_loss
-    
+
     def infinity_training(self):
         while(1):
             self.pooling_sampling()
             self.agent_learning()
             self.agent.save("si_agent.keras")
-            
+
     def greedy_until_training(self, greedy_upper=.2, greedy_lower=.02):
         self.greedy = greedy_upper
         while(self.greedy > greedy_lower):
@@ -468,7 +468,7 @@ def main():
 
     # ag = agent()
     ag = k.saving.load_model("si_agent.keras")
-    
+
     # env = atari_trainer(ag, epiNo=15, cloneAgFunc=agent)
     # # env.infinity_training()
     # env.greedy_until_training(greedy_upper=.2, greedy_lower=.02)
