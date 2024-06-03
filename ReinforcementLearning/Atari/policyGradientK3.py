@@ -138,7 +138,7 @@ class atari_trainer():
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.AdamW(self.lr, global_clipnorm=1.))
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(self.lr, rho = .5, global_clipnorm=1.))
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.SGD(1e-3, momentum=0.9, global_clipnorm=1.))
-        self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(1e-4, rho = .6, global_clipnorm=1.))
+        self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(1e-4, rho = .9, global_clipnorm=1.))
         # self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
         # self.cloneAg = [cloneAgFunc() for i in range(epiNo)]
@@ -148,8 +148,6 @@ class atari_trainer():
 
     def pooling_sampling(self):
         self.greedy *= .99
-        self.greedy = max(self.greedy, 0.02)
-
         start = timeit.default_timer()
 
         # # multi thread
@@ -166,6 +164,12 @@ class atari_trainer():
 
         # single thread
         for cEpi in range(self.samplingEpisodes):
+            if np.random.random(1)[0] > 1.:
+                #self.greedy = np.random.random(1)[0]
+                self.greedy = .1
+            else:
+                self.greedy = .02
+            #self.greedy = max(self.greedy, 0.02)
             self.sampling(cEpi)
 
         print('Epi Sampling Time: ', timeit.default_timer() - start)
@@ -206,8 +210,8 @@ class atari_trainer():
             preObservation = observation # for keeping the transition information
             observation, reward, terminated, truncated, info = self.env[eipNo].step(
                 action)
-            # 移動平均後，給予一些噪音，因為遊戲畫面太過於單調，造成神經網路行為沒有變化
-            observation = (np.array(observation) - 128.0)/128.0 * .6 + preObservation * .3 + np.random.normal(size=observation.shape) * .1
+            # 把動作歷史放到圖像裡面讓神經網路處理
+            observation = (np.array(observation) - 128.0)/128.0 * .6 + preObservation * .2 + np.random.normal(scale=(action / 6),  size=[210, 160, 3])  * .2
             actionP = tf.reduce_sum(
                 agentAction * tf.stack([tf.one_hot(action, 6, dtype='float16')], axis=0))
             epiScore += reward
@@ -275,7 +279,7 @@ class atari_trainer():
 
                 # appending observation into replay buffer. The element limit will be batch size * 100
                 # accumulatedReward = np.clip(np.array(rewardBuffer).mean(), -1, 5)
-                accumulatedReward = np.array(rewardBuffer).mean() + positionReward * epiScore
+                accumulatedReward = np.array(rewardBuffer).mean() #+ positionReward 
 
                 if(True):
                 # if (accumulatedReward != 0.0):
@@ -318,7 +322,7 @@ class atari_trainer():
             stateDataset = tf.data.Dataset.from_tensor_slices(
                 (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
             stateDataset = stateDataset.batch(
-                self.bs, drop_remainder=True).repeat(10).shuffle(32000)
+                self.bs, drop_remainder=True).repeat(8).shuffle(32000)
 
         for state in stateDataset:
             # policy gradient training
@@ -409,7 +413,7 @@ class atari_trainer():
                 actionCE = tf.cast(0., k.mixed_precision.dtype_policy().variable_dtype)
                 
                 # counting the action variance between batch (on-policy, MC)
-                actionVari = tf.clip_by_value(tf.math.reduce_mean(tf.math.reduce_variance(predicts, axis=0)), 0, 5)
+                actionVari = tf.math.reduce_mean(tf.math.reduce_variance(predicts, axis=0))
                 # actionVari = tf.cast(0., k.mixed_precision.dtype_policy().variable_dtype)
                 
                 on_policy_action_ce = tf.reduce_sum(
@@ -448,6 +452,13 @@ class atari_trainer():
             self.pooling_sampling()
             self.agent_learning()
             self.agent.save("si_agent.keras")
+            
+    def greedy_until_training(self, greedy_upper=.2, greedy_lower=.02):
+        self.greedy = greedy_upper
+        while(self.greedy > greedy_lower):
+            self.pooling_sampling()
+            self.agent_learning()
+            self.agent.save("si_agent.keras")
 
 
 
@@ -458,8 +469,9 @@ def main():
     # ag = agent()
     ag = k.saving.load_model("si_agent.keras")
     
-    # env = atari_trainer(ag, epiNo=30, cloneAgFunc=agent)
-    # env.infinity_training()
+    # env = atari_trainer(ag, epiNo=15, cloneAgFunc=agent)
+    # # env.infinity_training()
+    # env.greedy_until_training(greedy_upper=.2, greedy_lower=.02)
 
     env = atari_trainer(ag, epiNo=15, cloneAgFunc=agent)
     for loop_conter in range(20):
