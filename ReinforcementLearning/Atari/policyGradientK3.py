@@ -138,7 +138,7 @@ class atari_trainer():
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.AdamW(self.lr, global_clipnorm=1.))
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(self.lr, rho = .5, global_clipnorm=1.))
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.SGD(1e-3, momentum=0.9, global_clipnorm=1.))
-        self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(1e-4, rho = .9, global_clipnorm=1.))
+        self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(1e-4, rho = .4, global_clipnorm=1.))
         # self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
         # self.cloneAg = [cloneAgFunc() for i in range(epiNo)]
