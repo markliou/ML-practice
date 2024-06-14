@@ -321,8 +321,8 @@ class atari_trainer():
         with tf.device('/GPU:0'):
             stateDataset = tf.data.Dataset.from_tensor_slices(
                 (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
-            stateDataset = stateDataset.batch(
-                self.bs, drop_remainder=True).repeat(8).shuffle(32000)
+            stateDataset = stateDataset.repeat(8).shuffle(32000).batch(
+                self.bs, drop_remainder=True)
 
         for state in stateDataset:
             # policy gradient training
