@@ -53,27 +53,27 @@ class RMSNormalization(k.layers.Layer):
 
 def agent():
     x = k.Input([210, 160, 3])
-    x = k.layers.LayerNormalization([1,2,3])(x)
+    x = k.layers.LayerNormalization()(x)
     conv1 = k.layers.Conv2D(32, [7, 7], strides=[
                             2, 2], padding="SAME", kernel_regularizer=k.regularizers.L2(1e-4), activation=k.activations.mish)(x)
-    conv1 = k.layers.LayerNormalization([1,2,3])(conv1)
-    # conv1 = RMSNormalization()(conv1)
+    # conv1 = k.layers.LayerNormalization()(conv1)
+    conv1 = RMSNormalization()(conv1)
     conv2 = k.layers.Conv2D(64, [5, 5], strides=[
                             2, 2], padding="SAME", kernel_regularizer=k.regularizers.L2(1e-4), activation=k.activations.mish)(conv1)
-    conv2 = k.layers.LayerNormalization([1,2,3])(conv2)
+    # conv2 = k.layers.LayerNormalization()(conv2)
 
-    # conv2 = RMSNormalization()(conv2)
+    conv2 = RMSNormalization()(conv2)
     conv3 = k.layers.Conv2D(128, [5, 5], strides=[
                             2, 2], padding="SAME", kernel_regularizer=k.regularizers.L2(1e-4), activation=k.activations.mish)(conv2)
-    conv3 = k.layers.LayerNormalization([1,2,3])(conv3)
+    # conv3 = k.layers.LayerNormalization()(conv3)
     # conv3 += k.layers.MaxPooling2D(pool_size=(2, 2),strides=(1, 1), padding="same")(
     #     k.layers.MaxPooling2D(pool_size=(2, 2),strides=(1, 1), padding="same")(
     #     k.layers.Conv2D(128, [5, 5], strides=[1, 1], padding="SAME", kernel_regularizer=k.regularizers.L2(1e-4))(conv1)))
-    # conv3 = RMSNormalization()(conv3)
+    conv3 = RMSNormalization()(conv3)
     conv4 = k.layers.Conv2D(256, [3, 3], strides=[
                             2, 2], padding="SAME", kernel_regularizer=k.regularizers.L2(1e-4), activation=k.activations.mish)(conv3)
-    conv4 = k.layers.LayerNormalization([1,2,3])(conv4)
-    # conv4 = RMSNormalization()(conv4)
+    # conv4 = k.layers.LayerNormalization()(conv4)
+    conv4 = RMSNormalization()(conv4)
     conv5 = k.layers.Conv2D(512, [3, 3], strides=[
                             1, 1], padding="SAME", kernel_regularizer=k.regularizers.L2(1e-4), activation=k.activations.mish)(conv4)
     # conv5 += k.layers.MaxPooling2D(pool_size=(2, 2),strides=(1, 1), padding="same")(
@@ -142,8 +142,8 @@ def agent():
 class atari_trainer():
     def __init__(self, agent, epiNo, cloneAgFunc):
         self.samplingEpisodes = epiNo
-        #self.env = [gym.make('SpaceInvaders-v4') for i in range(self.samplingEpisodes)]
-        self.env = [gym.make('SpaceInvaders-v4', render_mode='human') for i in range(self.samplingEpisodes)]
+        self.env = [gym.make('SpaceInvaders-v4') for i in range(self.samplingEpisodes)]
+        #self.env = [gym.make('SpaceInvaders-v4', render_mode='human') for i in range(self.samplingEpisodes)]
         self.gameOverTag = False
         self.greedy = .02
         self.rewardBufferNo = 32
@@ -152,7 +152,7 @@ class atari_trainer():
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.AdamW(self.lr, global_clipnorm=1.))
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(self.lr, rho = .5, global_clipnorm=1.))
         #self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.SGD(1e-4, momentum=0.0, global_clipnorm=1.))
-        self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(1e-6, rho = .6, global_clipnorm=1.))
+        self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(1e-4, rho = .6, global_clipnorm=1.))
         # self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
         # self.cloneAg = [cloneAgFunc() for i in range(epiNo)]
@@ -178,7 +178,7 @@ class atari_trainer():
 
         # single thread
         for cEpi in range(self.samplingEpisodes):
-            if np.random.random(1)[0] > 1.0:
+            if np.random.random(1)[0] > 1.:
                 #self.greedy = np.random.random(1)[0]
                 self.greedy = .9
             else:
@@ -228,7 +228,7 @@ class atari_trainer():
             observation, reward, terminated, truncated, info = self.env[eipNo].step(
                 action)
             # 把動作歷史放到圖像裡面讓神經網路處理
-            observation = (np.array(observation) - 128.0)/128.0 * .5 + preObservation * .3 + np.random.normal(scale=(action / 6),  size=[210, 160, 3])  * .2
+            observation = (np.array(observation) - 128.0)/128.0 * .8 + preObservation * .1 + np.random.normal(scale=(action / 6),  size=[210, 160, 3])  * .1
             actionP = tf.reduce_sum(
                 agentAction * tf.stack([tf.one_hot(action, 6, dtype='float16')], axis=0))
             epiScore += reward
@@ -249,15 +249,15 @@ class atari_trainer():
             # reward += np.mean(np.abs(observation[180:195,60:100]) * positionSpec[60:100].reshape([1,40,1])) # 看戰機有沒有落在中央部分。因為背景是黑色，所以就把有顏色的當作戰機
             # positionReward += 5 * np.mean(np.abs(observation[180:195,:]) * positionSpec.reshape([1,160,1])) - 0.302114693102719 # 看戰機有沒有落在中央部分。因為背景是黑色，所以就把有顏色的當作戰機
 
-            # # 得分間隔越短，分數越高
-            # if reward > 0:
-            #     rewardIntervalStep = 0
-            # rewardIntervalStep += 1
-            # reward -= rewardIntervalStep * 1.
+            # 得分間隔越短，分數越高
+            if reward > 0:
+                rewardIntervalStep = 0
+            rewardIntervalStep += 1
+            reward -= rewardIntervalStep * 1.
 
-            # # 一條命中活的越長，給的分數越高
-            # stepReward += 1
-            # reward += stepReward * .02
+            # 一條命中活的越長，給的分數越高
+            stepReward += 1
+            reward += stepReward * .25
 
 
             # if the episode over, the parameters will be reset
@@ -357,10 +357,10 @@ class atari_trainer():
                 #                 abandentV = self.replayBuffer.pop(0)
                 #                 del abandentV
 
-                if (len(self.replayBuffer) > self.bs * 20):
+                if (len(self.replayBuffer) > self.bs * 10):
                     abandentV = self.replayBuffer.pop(0)
                     del abandentV
-                while (len(self.hScoreReplayBuffer) > self.bs * 20):
+                while (len(self.hScoreReplayBuffer) > self.bs * 10):
                     abandentV = self.hScoreReplayBuffer.pop(0)
                     del abandentV
 
@@ -473,14 +473,14 @@ class atari_trainer():
                 on_policy_action_ce = tf.reduce_sum(
                     k.ops.cast(tf.one_hot(k.ops.argmax(predicts), 6), k.mixed_precision.dtype_policy().variable_dtype) *
                     -tf.math.log(tf.clip_by_value(predicts, 1e-6, 1.)), axis=-1)
-                on_policy_ce = tf.reduce_mean(tf.stop_gradient(actionCE) * on_policy_action_ce + tf.stop_gradient(maskedPredictsLROnPolicy + actionVari * 0) * on_policy_action_ce)
+                on_policy_ce = tf.reduce_mean(tf.stop_gradient(actionCE) * on_policy_action_ce + tf.stop_gradient(maskedPredictsLROnPolicy + actionVari) * on_policy_action_ce)
 
                 # importance sampling (off-policy)
                 under = actionPStack
                 upper = tf.math.reduce_max(
                     predicts * actionStack, axis=-1)
                 iSampling = tf.cast(upper/under, dtype='float16')
-                clippedReward = tf.clip_by_value(tf.cast(tf.stop_gradient(rewardStack), dtype='float16') * tf.stop_gradient(iSampling), -100, 100)
+                clippedReward = tf.clip_by_value(tf.cast(tf.stop_gradient(rewardStack), dtype='float16') * tf.stop_gradient(iSampling), -100, 500)
                 clippedReward *= rewardWeight
 
                 # # watching the action (off-policy)
@@ -527,8 +527,8 @@ def main():
     # # env.infinity_training()
     # env.greedy_until_training(greedy_upper=.2, greedy_lower=.02)
 
-    env = atari_trainer(ag, epiNo=2, cloneAgFunc=agent)
-    for loop_conter in range(32):
+    env = atari_trainer(ag, epiNo=5, cloneAgFunc=agent)
+    for loop_conter in range(20):
         env.pooling_sampling()
         env.agent_learning()
         ag.save("si_agent.keras")

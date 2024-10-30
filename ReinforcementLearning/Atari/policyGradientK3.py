@@ -138,7 +138,7 @@ class atari_trainer():
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.AdamW(self.lr, global_clipnorm=1.))
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(self.lr, rho = .5, global_clipnorm=1.))
         # self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.SGD(1e-3, momentum=0.9, global_clipnorm=1.))
-        self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(1e-4, rho = .9, global_clipnorm=1.))
+        self.optimizer = k.mixed_precision.LossScaleOptimizer(k.optimizers.RMSprop(1e-4, rho = .4, global_clipnorm=1.))
         # self.optimizer = k.optimizers.AdamW(1e-4, global_clipnorm=1.)
         self.agent = agent
         # self.cloneAg = [cloneAgFunc() for i in range(epiNo)]
@@ -321,8 +321,8 @@ class atari_trainer():
         with tf.device('/GPU:0'):
             stateDataset = tf.data.Dataset.from_tensor_slices(
                 (list(obvStacks), list(rewardStacks), list(actionStacks), list(actionPStacks)))
-            stateDataset = stateDataset.batch(
-                self.bs, drop_remainder=True).repeat(8).shuffle(32000)
+            stateDataset = stateDataset.repeat(8).shuffle(32000).batch(
+                self.bs, drop_remainder=True)
 
         for state in stateDataset:
             # policy gradient training
