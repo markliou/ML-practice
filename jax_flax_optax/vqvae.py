@@ -32,20 +32,36 @@ class vqvae(flax.nnx.Module):
 
         # input size: [-1, 128, 128, 3]
         # encoder
-        self.conv1 = flax.nnx.Conv(3, 32, (3,3), strides=2, rngs=self.rngs) # [-1, 64, 64, 32]
+        self.conv1 = flax.nnx.Conv(3, 32, (11,11), strides=2, rngs=self.rngs) # [-1, 64, 64, 32]
         self.layers.append(self.conv1)
-        self.conv2 = flax.nnx.Conv(32, 64, (3,3), strides=2, rngs=self.rngs) # [-1, 32, 32, 64]
+        self.conv1c = flax.nnx.Conv(32, 32, (3,3), strides=1, rngs=self.rngs) # [-1, 64, 64, 32]
+        self.layers.append(self.conv1c)
+
+        self.conv2 = flax.nnx.Conv(32, 64, (11,11), strides=2, rngs=self.rngs) # [-1, 32, 32, 64]
         self.layers.append(self.conv2)
-        self.conv3 = flax.nnx.Conv(64, 128, (3,3), strides=2, rngs=self.rngs) # [-1, 16, 16, 128]
+        self.conv2c = flax.nnx.Conv(64, 64, (3,3), strides=1, rngs=self.rngs) # [-1, 32, 32, 64]
+        self.layers.append(self.conv2c)
+
+        self.conv3 = flax.nnx.Conv(64, 128, (11,11), strides=2, rngs=self.rngs) # [-1, 16, 16, 128]
         self.layers.append(self.conv3)
+        self.conv3c = flax.nnx.Conv(128, 128, (3,3), strides=1, rngs=self.rngs) # [-1, 16, 16, 128]
+        self.layers.append(self.conv3c)
 
         # decoder
-        self.tconv1 = flax.nnx.ConvTranspose(128, 64, (3,3), strides=2, rngs=self.rngs) # [-1, 32, 32, 64]
+        self.tconv1 = flax.nnx.ConvTranspose(128, 64, (5,5), strides=2, rngs=self.rngs) # [-1, 32, 32, 64]
         self.layers.append(self.tconv1)
-        self.tconv2 = flax.nnx.ConvTranspose(64, 32, (3,3), strides=2, rngs=self.rngs) # [-1, 64, 64, 32]
+        self.tconv1c = flax.nnx.Conv(64, 64, (3,3), strides=1, rngs=self.rngs) # [-1, 32, 32, 64]
+        self.layers.append(self.conv2c)
+
+        self.tconv2 = flax.nnx.ConvTranspose(64, 32, (5,5), strides=2, rngs=self.rngs) # [-1, 64, 64, 32]
         self.layers.append(self.tconv2)
-        self.tconv3 = flax.nnx.ConvTranspose(32, 3, (3,3), strides=2, rngs=self.rngs) # [-1, 128, 128, 3]
+        self.tconv2c = flax.nnx.Conv(32, 32, (3,3), strides=1, rngs=self.rngs) # [-1, 64, 64, 32]
+        self.layers.append(self.tconv2c)
+
+        self.tconv3 = flax.nnx.ConvTranspose(32, 32, (5,5), strides=2, rngs=self.rngs) # [-1, 128, 128, 32]
         self.layers.append(self.tconv3)
+        self.tconv3c = flax.nnx.Conv(32, 3, (3,3), strides=1, rngs=self.rngs) # [-1, 64, 64, 3]
+        self.layers.append(self.tconv3c)
 
         # setting code book
         self.codeBook = flax.nnx.Param(
@@ -61,17 +77,20 @@ class vqvae(flax.nnx.Module):
 
         # encoding
         d1 = self.activation(self.conv1(input))
+        d1 = self.activation(self.conv1c(d1))
         d2 = self.activation(self.conv2(d1))
-        d3 = self.conv3(d2)
+        d2 = self.activation(self.conv2c(d2))
+        d3 = self.activation(self.conv3(d2))
+        d3 = self.conv3c(d3)
 
         # reshaping for code exchange
         candidateLatents = jnp.reshape(d3, [-1, 1, 128])
         self.candidateLatents.value = candidateLatents
         # calculating distances
-        euDis = jnp.sum((candidateLatents - self.codeBook) ** 2, axis = -1) # [-1, 16]
+        euDis = jnp.sum((candidateLatents - self.codeBook) ** 2, axis = -1) # [-1, 128]
         activeIndex = jnp.argmin(euDis, axis=-1) # [-1]
         # replacing codes
-        activeIndexOnehot = jax.nn.one_hot(activeIndex, self.codebookSize) # [-1, 16]
+        activeIndexOnehot = jax.nn.one_hot(activeIndex, self.codebookSize) # [-1, 128]
         self.sow(flax.nnx.Intermediate, "activeIndexOnehot", activeIndexOnehot, reduce_fn=lambda x, y: y)
         replacedLatents = jnp.sum(
             jnp.reshape(activeIndexOnehot, [-1, self.codebookSize, 1]) * self.codeBook,
@@ -84,8 +103,11 @@ class vqvae(flax.nnx.Module):
         replacedLatents = jax.lax.stop_gradient(replacedLatents - d3) + d3
 
         d4 = self.activation(self.tconv1(replacedLatents))
+        d4 = self.activation(self.tconv1c(d4))
         d5 = self.activation(self.tconv2(d4))
-        out = self.tconv3(d5)
+        d5 = self.activation(self.tconv2c(d5))
+        d6 = self.activation(self.tconv3(d5))
+        out = self.tconv3c(d6)
 
         return out
 
@@ -102,8 +124,8 @@ class vqvae(flax.nnx.Module):
             axis = -2
         ) # [-1, 128]
         candidateLatens4Loss = jnp.reshape(self.candidateLatents, [-1, 128])
-        commitLoss = jnp.mean(jnp.sum((jax.lax.stop_gradient(candidateLatens4Loss) - replacedLatents) ** 2, axis=-1))  # commit loss
-        vqLoss = jnp.mean(jnp.sum((candidateLatens4Loss - jax.lax.stop_gradient(replacedLatents)) ** 2, axis=-1)) *.25 # vq loss
+        commitLoss = jnp.mean((jax.lax.stop_gradient(candidateLatens4Loss) - replacedLatents) ** 2)  # commit loss
+        vqLoss = jnp.mean((candidateLatens4Loss - jax.lax.stop_gradient(replacedLatents)) ** 2) *.25 # vq loss
         self.sow(flax.nnx.Intermediate, "commitLoss", commitLoss, reduce_fn=lambda x, y: y)
         self.sow(flax.nnx.Intermediate, "vqLoss", vqLoss, reduce_fn=lambda x, y: y)
         return commitLoss + vqLoss
@@ -133,7 +155,7 @@ def update_model_weights(model, y):
    opt.update(grads)
    return loss
 
-trainingStep = 50000
+trainingStep = 500000
 for step in range(trainingStep):
     x = jnp.array(next(ds_iter))
     loss = update_model_weights(model, x)
