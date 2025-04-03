@@ -8,7 +8,7 @@ a = flax.nnx.Conv(3,3,3)
 a.kernel = a.kernel.replace(flax.nnx.Param(jnp.zeros(a.kernel.shape, a.kernel.dtype)))
 ```
 
-# 兩個模型互相置換 => 如果如一用leaves置換速度太慢
+# 兩個模型互相置換 => 逐一使用leaves置換速度太慢
 如果兩個模型形狀相同，直接透過state跟filter把變數取出後操作即可
 思考邏輯: 
 1. 解開state
