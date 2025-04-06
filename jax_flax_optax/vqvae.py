@@ -120,7 +120,8 @@ class vqvae(flax.nnx.Module):
 
     def commit_and_vq_loss(self):
         replacedLatents = jnp.sum(
-            jnp.reshape(self.activeIndexOnehot, [-1, self.codebookSize, 1]) * self.codeBook,
+            ## !! use nnx.Param.value object for gradient. Or Jax will use nnx.Parameter.view that only give value without computation graph edges !! ##
+            jnp.reshape(self.activeIndexOnehot, [-1, self.codebookSize, 1]) * self.codeBook.value,
             axis = -2
         ) # [-1, 128]
         candidateLatens4Loss = jnp.reshape(self.candidateLatents, [-1, 128])
