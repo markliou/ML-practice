@@ -1,0 +1,3 @@
+take off
+move up 50
+exit
