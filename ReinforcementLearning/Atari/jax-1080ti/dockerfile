@@ -1,0 +1,163 @@
+FROM ubuntu:26.04
+
+# Install dependencies needed for CUDA 11 installation on modern Ubuntu
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    wget \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install libtinfo5 (required for CUDA 11 on newer Ubuntu versions)
+RUN wget http://archive.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.4-2_amd64.deb && \
+    dpkg -i libtinfo5_6.4-2_amd64.deb || apt-get install -fy && \
+    rm libtinfo5_6.4-2_amd64.deb
+
+# Download and install CUDA 11.8 via runfile (toolkit only, override system compiler checks)
+RUN wget https://developer.download.nvidia.com/compute/cuda/11.8.0/local_installers/cuda_11.8.0_520.61.05_linux.run && \
+    sh cuda_11.8.0_520.61.05_linux.run --silent --toolkit --override && \
+    rm cuda_11.8.0_520.61.05_linux.run
+
+ENV PATH=/usr/local/cuda-11.8/bin:${PATH}
+ENV LD_LIBRARY_PATH=/usr/local/cuda-11.8/lib64:${LD_LIBRARY_PATH}
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV XLA_PYTHON_CLIENT_PREALLOCATE=false
+ENV XLA_PYTHON_CLIENT_ALLOCATOR=platform
+ENV _GLIBCXX_USE_CXX11_ABI=1
+ENV CUDA_HOME=/usr/local/cuda
+
+RUN echo "nameserver 1.1.1.1" | tee -a /etc/resolv.conf ;\
+    apt-get update -y;\
+    apt-get install tzdata -y;\
+    apt-get install python3-opencv -y --fix-missing
+
+RUN pip install --upgrade pip --break-system-packages; pip install uv --break-system-packages
+
+RUN apt-get update -y;\
+    # apt install python3-pip -y;\
+    apt install python3-tk -y;\
+    apt install git -y;\
+    apt install vim -y;\
+    apt install wget -y;\
+    apt install -y libsm6 libxext6 zlib1g-dev libjpeg-dev;\
+    uv pip install --system --no-cache-dir ninja --break-system-packages;\
+    uv pip install --system tqdm --break-system-packages;\
+    # pip3 install Pillow;\
+    uv pip install --system pillow-simd --break-system-packages;\
+    uv pip install --system kornia --break-system-packages;\
+    uv pip install --system scipy --break-system-packages;\
+    uv pip install --system dill --break-system-packages;\
+    # pip3 install ktext;\
+    uv pip install --system h5py --break-system-packages;\
+    uv pip install --system pandas --break-system-packages;\
+    uv pip install --system grpcio --break-system-packages;\
+    # pip3 install Flask;\
+    # pip3 install futures;\
+    # pip3 install --upgrade keras;\
+    uv pip install --system redis --break-system-packages;\
+    uv pip install --system scikit-image --break-system-packages;\
+    # pip3 install tensorflow-datasets;\
+    # pip3 install tensorflow-probability;\
+    uv pip install --system matplotlib --break-system-packages;\
+    uv pip install --system dvc dvclive --break-system-packages;\
+    uv pip install --system virtualenv --break-system-packages;\
+    uv pip install --system timm --break-system-packages;\
+    # pip3 install torchao
+    uv pip install --system opencv-contrib-python --break-system-packages
+
+# install torchao for current cuda version
+RUN git clone https://github.com/pytorch/ao.git && \
+    cd ao && \
+    MAX_JOBS=2 TORCH_CUDA_ARCH_LIST="8.0 8.6 8.9 9.0 10.0+PTX" uv pip install --break-system-packages --system --no-build-isolation . && \
+    cd .. && \
+    rm -fr ao
+
+#####  pytroch installation #####
+# test the gpu available: torch.cuda.is_available()
+
+## installing pytorch -- but skip install cuda related package
+# COPY build_torch_from_source.sh /root/
+# RUN /usr/bin/bash /root/build_torch_from_source.sh
+
+## installing pytorch directly from pip
+# RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu129
+## installing pytorch in virtualenv. Using the dl-container py package as the lib base
+# RUN virtualenv --system-site-packages /torch_env;\
+#     echo 'alias torchdev="source /torch_env/bin/activate"' >> /root/.bashrc && \
+#     echo 'alias torchdev="source /torch_env/bin/activate"' >> /etc/bash.bashrc ;\
+#     /torch_env/bin/pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128 &&\
+#     echo 'export LD_LIBRARY_PATH="/torch_env/lib/python3.x/site-packages/torch/lib:$LD_LIBRARY_PATH"' >> /torch_env/bin/activate
+
+##### hugging face toolchain #####
+RUN uv pip install --system --no-cache-dir transformers --break-system-packages;\
+    # pip3 install --no-cache-dir accelerate;\
+    uv pip install --system --no-cache-dir -U "huggingface_hub[cli]" --break-system-packages;\
+    git config --global credential.helper store
+
+
+#####  jax installation #####
+## installing Jax with cuda -- installed aftr torch can install newer version of cuda
+# RUN pip3 install --no-cache-dir --upgrade "jax[cuda12_local]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+
+## installing jax directly from pip
+# RUN pip3 install -U "jax[cuda12]"
+RUN uv pip install --system -U "jax[cuda11_local]" --break-system-packages
+
+# install the jax related tools
+RUN uv pip install --system flax --break-system-packages;\
+    uv pip install --system optax --break-system-packages
+
+# # fix the ldconfig promblem
+# RUN mv /usr/local/lib/libtbbmalloc_proxy.so.2 /usr/local/lib/libtbbmalloc_proxy.so.2.real ;\
+#     ln -s /usr/local/lib/libtbbmalloc_proxy.so.2.real /usr/local/lib/libtbbmalloc_proxy.so.2 ;\
+#     mv /usr/local/lib/libtbbbind_2_0.so.3 /usr/local/lib/libtbbbind_2_0.so.3.real ;\
+#     ln -s /usr/local/lib/libtbbbind_2_0.so.3.real /usr/local/lib/libtbbbind_2_0.so.3 ;\
+#     mv /usr/local/lib/libtbbbind_2_5.so.3 /usr/local/lib/libtbbbind_2_5.so.3.real ;\
+#     ln -s /usr/local/lib/libtbbbind_2_5.so.3.real /usr/local/lib/libtbbbind_2_5.so.3 ;\
+#     mv /usr/local/lib/libtbbmalloc.so.2 /usr/local/lib/libtbbmalloc.so.2.real ;\
+#     ln -s /usr/local/lib/libtbbmalloc.so.2.real /usr/local/lib/libtbbmalloc.so.2 ;\
+#     mv /usr/local/lib/libtbb.so.12 /usr/local/lib/libtbb.so.12.real ;\
+#     ln -s /usr/local/lib/libtbb.so.12.real /usr/local/lib/libtbb.so.12 ;\
+#     mv /usr/local/lib/libtbbbind.so.3 /usr/local/lib/libtbbbind.so.3.real ;\
+#     ln -s /usr/local/lib/libtbbbind.so.3.real /usr/local/lib/libtbbbind.so.3 ;\
+#     mv /lib/x86_64-linux-gnu/libcudadebugger.so.1 /lib/x86_64-linux-gnu/libcudadebugger.so.1.real ;\
+#     ln -s /lib/x86_64-linux-gnu/libcudadebugger.so.1.real /lib/x86_64-linux-gnu/libcudadebugger.so.1 ;\
+#     mv /lib/x86_64-linux-gnu/libcuda.so.1 /lib/x86_64-linux-gnu/libcuda.so.1.real ;\
+#     ln -s /lib/x86_64-linux-gnu/libcuda.so.1.real /lib/x86_64-linux-gnu/libcuda.so.1
+
+# the gpu test script: Tensorflow, Jax, pyTorch
+COPY gpu_test.py /usr/local/bin/gpu_test
+RUN chmod 0755 /usr/local/bin/gpu_test
+
+# VS code extensions
+# RUN curl -fsSL https://code-server.dev/install.sh | sh
+# RUN code-server --install-extension ms-python.python \
+#                 --install-extension ms-ceintl.vscode-language-pack-zh-hant \
+#                 --install-extension ms-python.debugpy \
+#                 --install-extension ms-toolsai.jupyter \
+#                 --install-extension ms-toolsai.jupyter-keymap \
+#                 --install-extension ms-toolsai.jupyter-renderers \
+#                 --install-extension ms-toolsai.vscode-jupyter-cell-tags \
+#                 --install-extension ms-toolsai.vscode-jupyter-slideshow
+
+
+
+# providing the public key for loggin (optional)
+RUN mkdir /root/.ssh ;\
+    touch /root/.ssh/authorized_keys ;\
+    chmod 644 /root/.ssh ;\
+    chmod 644 /root/.ssh/authorized_keys ;\
+    echo ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDKgLR7W2eqrB3SOKbKr5wom8ZmhAPKwXiCd+H+9GKeG1uxCYPJbRoMXBG+8ot/pyyk7ObVpJvTxkPYhKkc1j2LGsgJ2O8AMo1t0PYGn0Lr5UdnxwnBjuxOZk9cRXAlfhVQkYLwRP+47+JYEHUUiuAKxxmfiuEVag8yrpw9BrB86XdR7bTqw8bAn8h1t1LYmAEc/Bh9GAWQuu7TDO0d6ymM1uygioYQrvy76mmK4zlbuVXqTLUUF5TjmJvZHjbjMDUvnr8P5DELo23VWBSP64CRLDSD3Q0l1l+X7zwuIc5H99aDg/x8txzfynjrP1P2Ae4sZBLLnaKDtZF2zaiTOJm08eFQ5x/xEByR8Lo2K590DwhGBARQStLbXtjb4B5rS9CmkE0+DWX6Mg9yrmmQmFWCNo3NTYn7xx/S56E5IYJlXdFbIO8BfAoNaLx2LdJldUklKctPyAEvtIDMCuEwVZTYwXJT7AFZ1KClp0nbP3dl20PkYQRzivWyA38SaSu7fg0= markliou@markliou-ZBPDuo >> /root/.ssh/authorized_keys
+
+# RUN mkdir /workspace
+WORKDIR /workspace
+
+# IPython
+EXPOSE 8888
+# TensorBoard
+EXPOSE 6006
+# ssh
+EXPOSE 22
+
+CMD ["/etc/init.d/ssh", "start", "-D"]
