@@ -1,0 +1,161 @@
+FROM ubuntu:26.04
+
+ENV TZ=Asia/Taipei
+ARG DEBIAN_FRONTEND=noninteractive
+
+ENV CUDA_HOME=/usr/local/cuda-12.9
+ENV PATH=/usr/local/cuda-12.9/bin:${PATH}
+ENV LD_LIBRARY_PATH=/usr/local/cuda-12.9/lib64:${LD_LIBRARY_PATH}
+
+ENV XLA_PYTHON_CLIENT_PREALLOCATE=false
+ENV XLA_PYTHON_CLIENT_ALLOCATOR=platform
+
+# 跳過 JAX 啟動時的 CUDA 版本檢查 (cuptiGetVersion 在某些 driver/CUPTI 組合會回
+# CUPTI error 999, 導致 plugin 初始化失敗)。CUPTI 僅用於 profiling, 不影響 compute,
+# 因此跳過檢查即可正常用 GPU; 代價是 jax.profiler 無法使用。
+ENV JAX_SKIP_CUDA_CONSTRAINTS_CHECK=1
+
+# CUDA 12.9 的 nvcc 最高只支援 GCC 14.x (host compiler major version check)
+# Ubuntu 26.04 預設 GCC 15.2 會被 nvcc 拒絕,改用 universe 的 gcc-14
+ENV NVCC_CCBIN=/usr/bin/g++-14
+ENV CC=/usr/bin/gcc-14
+ENV CXX=/usr/bin/g++-14
+ENV CUDAHOSTCXX=/usr/bin/g++-14
+
+RUN echo "nameserver 1.1.1.1" | tee -a /etc/resolv.conf ; \
+    apt-get update -y ; \
+    apt-get install -y --no-install-recommends tzdata ; \
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime ; \
+    echo $TZ > /etc/timezone ; \
+    apt-get install -y --no-install-recommends python3-opencv --fix-missing ; \
+    apt-get clean ; \
+    rm -rf /var/lib/apt/lists/*
+
+# Install dependencies needed for CUDA installation on modern/minimal Ubuntu
+# 注意: 26.04 已沒有 libxml2 / libxml2t64 套件 (只剩 libxml2-16, soname 是 .so.16),
+#       舊的 "libxml2 || libxml2t64" fallback 已移除,改在下方手動裝 noble 版
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
+        build-essential \
+        gcc-14 \
+        g++-14 \
+        wget \
+        curl \
+        ca-certificates \
+        bash \
+        xz-utils \
+        bzip2 \
+        gzip \
+        tar \
+        gawk \
+        file \
+        findutils && \
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100 && \
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install libtinfo5 required by older CUDA tooling
+RUN wget -O /tmp/libtinfo5.deb \
+        http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb && \
+    apt-get update -y && \
+    apt-get install -y --no-install-recommends /tmp/libtinfo5.deb && \
+    rm -f /tmp/libtinfo5.deb && \
+    rm -rf /var/lib/apt/lists/*
+
+# CUDA runfile 的 cuda-installer 仍依賴舊 libxml2 ABI (libxml2.so.2)
+# 26.04 只有 libxml2.so.16,所以從 noble (24.04) pool 拉舊版,
+# noble 的 libxml2 依賴 libicu74 (26.04 也沒有),要一起裝
+RUN wget -O /tmp/libicu74.deb \
+        http://archive.ubuntu.com/ubuntu/pool/main/i/icu/libicu74_74.2-1ubuntu3.1_amd64.deb && \
+    wget -O /tmp/libxml2.deb \
+        http://archive.ubuntu.com/ubuntu/pool/main/libx/libxml2/libxml2_2.9.14+dfsg-1.3ubuntu3.7_amd64.deb && \
+    apt-get update -y && \
+    apt-get install -y --no-install-recommends /tmp/libicu74.deb /tmp/libxml2.deb && \
+    rm -f /tmp/libicu74.deb /tmp/libxml2.deb && \
+    rm -rf /var/lib/apt/lists/*
+
+# Download and install CUDA 12.9.1 via runfile: toolkit only
+RUN set -eux; \
+    mkdir -p /var/tmp/cuda-installer; \
+    wget -O /tmp/cuda_12.9.1_575.57.08_linux.run \
+        https://developer.download.nvidia.com/compute/cuda/12.9.1/local_installers/cuda_12.9.1_575.57.08_linux.run; \
+    sh /tmp/cuda_12.9.1_575.57.08_linux.run \
+        --silent \
+        --toolkit \
+        --override \
+        --toolkitpath=/usr/local/cuda-12.9 \
+        --tmpdir=/var/tmp/cuda-installer \
+    || { \
+        echo "CUDA installer failed. Last 200 lines of logs:"; \
+        tail -n 200 /var/log/cuda-installer.log || true; \
+        tail -n 200 /var/log/nvidia-installer.log || true; \
+        find /var/log -maxdepth 1 -type f -iname '*cuda*' -o -iname '*nvidia*' || true; \
+        exit 1; \
+    }; \
+    rm -f /tmp/cuda_12.9.1_575.57.08_linux.run; \
+    rm -rf /var/tmp/cuda-installer
+
+RUN apt-get update -y ; apt-get install -y python3-pip;\
+    python3 -m pip install --upgrade pip --break-system-packages;\
+    python3 -m pip install uv --break-system-packages
+
+RUN apt-get update -y;\
+    apt install python3-tk -y;\
+    apt install git -y;\
+    apt install vim -y;\
+    apt install wget -y;\
+    apt install python3-pip -y;\
+    apt install -y libsm6 libxext6 zlib1g-dev libjpeg-dev;\
+    uv pip install --system --no-cache-dir ninja --break-system-packages;\
+    uv pip install --system tqdm --break-system-packages;\
+    uv pip install --system pillow-simd --break-system-packages;\
+    uv pip install --system kornia --break-system-packages;\
+    uv pip install --system scipy --break-system-packages;\
+    uv pip install --system dill --break-system-packages;\
+    uv pip install --system h5py --break-system-packages;\
+    uv pip install --system pandas --break-system-packages;\
+    uv pip install --system grpcio --break-system-packages;\
+    uv pip install --system redis --break-system-packages;\
+    uv pip install --system scikit-image --break-system-packages;\
+    uv pip install --system matplotlib --break-system-packages;\
+    uv pip install --system dvc dvclive --break-system-packages;\
+    uv pip install --system virtualenv --break-system-packages;\
+    uv pip install --system timm --break-system-packages;\
+    uv pip install --system opencv-contrib-python --break-system-packages
+
+##### hugging face toolchain #####
+RUN uv pip install --system --no-cache-dir transformers --break-system-packages;\
+    uv pip install --system --no-cache-dir -U "huggingface_hub[cli]" --break-system-packages;\
+    git config --global credential.helper store
+
+#####  jax installation #####
+## use the local CUDA 12.9 toolkit installed above
+RUN uv pip install --system -U "jax[cuda12_local]" --break-system-packages
+
+# install the jax related tools
+RUN uv pip install --system flax --break-system-packages;\
+    uv pip install --system optax --break-system-packages
+
+# install gymnasium and atari packages, and automatically download/authorize Atari ROMs
+RUN uv pip install --system "gymnasium[atari,accept-rom-license]" --break-system-packages
+
+# the gpu test script: Tensorflow, Jax, pyTorch
+COPY gpu_test.py /usr/local/bin/gpu_test
+RUN chmod 0755 /usr/local/bin/gpu_test
+
+# providing the public key for loggin (optional)
+RUN mkdir /root/.ssh ;\
+    touch /root/.ssh/authorized_keys ;\
+    chmod 644 /root/.ssh ;\
+    chmod 644 /root/.ssh/authorized_keys ;\
+    echo ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDKgLR7W2eqrB3SOKbKr5wom8ZmhAPKwXiCd+H+9GKeG1uxCYPJbRoMXBG+8ot/pyyk7ObVpJvTxkPYhKkc1j2LGsgJ2O8AMo1t0PYGn0Lr5UdnxwnBjuxOZk9cRXAlfhVQkYLwRP+47+JYEHUUiuAKxxmfiuEVag8yrpw9BrB86XdR7bTqw8bAn8h1t1LYmAEc/Bh9GAWQuu7TDO0d6ymM1uygioYQrvy76mmK4zlbuVXqTLUUF5TjmJvZHjbjMDUvnr8P5DELo23VWBSP64CRLDSD3Q0l1l+X7zwuIc5H99aDg/x8txzfynjrP1P2Ae4sZBLLnaKDtZF2zaiTOJm08eFQ5x/xEByR8Lo2K590DwhGBARQStLbXtjb4B5rS9CmkE0+DWX6Mg9yrmmQmFWCNo3NTYn7xx/S56E5IYJlXdFbIO8BfAoNaLx2LdJldUklKctPyAEvtIDMCuEwVZTYwXJT7AFZ1KClp0nbP3dl20PkYQRzivWyA38SaSu7fg0= markliou@markliou-ZBPDuo >> /root/.ssh/authorized_keys
+
+WORKDIR /workspace
+
+# IPython
+EXPOSE 8888
+# TensorBoard
+EXPOSE 6006
+# ssh
+EXPOSE 22
+
+CMD ["/etc/init.d/ssh", "start", "-D"]
